@@ -5,6 +5,24 @@
 	// --- Refs --- (Optional, but can be useful)
 	let viewportElement: HTMLDivElement;
 	let worldElement: HTMLDivElement;
+	let bgCanvasElement: HTMLCanvasElement;
+	let bgCtx: CanvasRenderingContext2D | null = null;
+
+	// --- Constants ---
+	const SMOOTHING_FACTOR = 0.2;
+	const MIN_BOX_SIZE = 20;
+
+	// --- Utility Functions ---
+	function debounce<T extends (...args: any[]) => void>(
+		func: T,
+		wait: number
+	): (...args: Parameters<T>) => void {
+		let timeout: number | undefined;
+		return (...args: Parameters<T>) => {
+			clearTimeout(timeout);
+			timeout = window.setTimeout(() => func(...args), wait);
+		};
+	}
 
 	// --- Core State ---
 	let zoom = 1;
@@ -14,7 +32,6 @@
 	let targetOffsetX = 0;
 	let targetOffsetY = 0;
 	let animationFrameId: number | null = null; // ID for cancelling animation frame
-	const SMOOTHING_FACTOR = 0.2; // Adjust for more/less smoothing (0 to 1)
 
 	// --- Interaction State ---
 	let isPanning = false;
@@ -30,7 +47,6 @@
 	let startResizeY = 0;
 	let startResizeWidth = 0;
 	let startResizeHeight = 0;
-	const MIN_BOX_SIZE = 20; // Minimum width/height for a box
 
 	// Box Dragging State
 	let isDraggingBox = false;
@@ -86,6 +102,85 @@
 		}
 	}
 
+	// --- Draw Background ---
+	function drawBackground() {
+		if (!browser || !bgCtx || !bgCanvasElement) return;
+
+		const ctx = bgCtx;
+		const width = bgCanvasElement.width;
+		const height = bgCanvasElement.height;
+		const dpr = window.devicePixelRatio || 1;
+		const viewWidthLogical = width / dpr;
+		const viewHeightLogical = height / dpr;
+
+		// Reset transform and apply DPR scaling
+		ctx.resetTransform();
+		ctx.scale(dpr, dpr);
+		ctx.clearRect(0, 0, viewWidthLogical, viewHeightLogical);
+
+		// Apply the world transformation (pan and zoom) to the canvas context
+		// This makes the drawing operations below happen in world coordinates
+		ctx.translate(offsetX, offsetY); // Translate the origin
+		ctx.scale(zoom, zoom); // Scale around the new origin
+
+		// --- Grid Drawing Logic (World Space) --- //
+		const baseGridSize = 100; // World units for the largest grid
+		const targetScreenSize = 50; // Ideal apparent size on screen (logical pixels)
+		const baseDotRadius = 1; // Base radius in logical pixels at zoom = 1
+		const maxGrids = 5;
+		const fadeRange = 0.5;
+
+		// Calculate viewport boundaries in world coordinates
+		const worldViewTopLeft = screenToWorld(0, 0);
+		const worldViewBottomRight = screenToWorld(viewWidthLogical, viewHeightLogical);
+
+		// Iterate through grid levels
+		for (let i = 0; i < maxGrids; i++) {
+			const gridSizeWorld = baseGridSize / Math.pow(2, i); // Grid size in world units
+			const gridSizeScreen = gridSizeWorld * zoom; // Apparent grid size in logical screen pixels
+
+			// Skip grids that are too small or too large on screen
+			if (gridSizeScreen < targetScreenSize / 4 || gridSizeScreen > targetScreenSize * 4) {
+				continue;
+			}
+
+			// Calculate alpha based on closeness to target screen size
+			let alpha = 0;
+			if (gridSizeScreen > targetScreenSize) {
+				alpha = 1.0 - Math.min(1, (gridSizeScreen / targetScreenSize - 1) / fadeRange);
+			} else {
+				alpha = Math.min(1, gridSizeScreen / (targetScreenSize * (1 - fadeRange)));
+			}
+			alpha = Math.max(0, alpha * alpha);
+			if (alpha <= 0.01) continue;
+
+			ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`; // #ccc with alpha
+
+			// Calculate the dot radius in world units to appear constant size on screen
+			const dotRadiusWorld = baseDotRadius / zoom;
+
+			// Find the first grid lines within the world view
+			const startWorldX = Math.floor(worldViewTopLeft.x / gridSizeWorld) * gridSizeWorld;
+			const startWorldY = Math.floor(worldViewTopLeft.y / gridSizeWorld) * gridSizeWorld;
+			const endWorldX = worldViewBottomRight.x; // Draw up to the right edge
+			const endWorldY = worldViewBottomRight.y; // Draw up to the bottom edge
+
+			// Draw dots at their world coordinates
+			for (let worldX = startWorldX; worldX < endWorldX; worldX += gridSizeWorld) {
+				for (let worldY = startWorldY; worldY < endWorldY; worldY += gridSizeWorld) {
+					ctx.beginPath();
+					// Draw arc at world coordinates, radius is also in world units
+					ctx.arc(worldX, worldY, dotRadiusWorld, 0, Math.PI * 2);
+					ctx.fill();
+				}
+			}
+		}
+		// --- End Grid Drawing Logic --- //
+
+		// Reset transform after drawing background elements
+		ctx.resetTransform();
+	}
+
 	// --- Animation Loop ---
 	function lerp(start: number, end: number, factor: number): number {
 		return start + (end - start) * factor;
@@ -99,6 +194,9 @@
 		offsetY = lerp(offsetY, targetOffsetY, SMOOTHING_FACTOR);
 		zoom = lerp(zoom, targetZoom, SMOOTHING_FACTOR);
 
+		// Draw the background with the new intermediate values
+		drawBackground();
+
 		// Stop animation if very close to target to prevent infinite loop
 		const threshold = 0.01; // Small threshold for position and zoom
 		if (
@@ -110,8 +208,9 @@
 			offsetX = targetOffsetX;
 			offsetY = targetOffsetY;
 			zoom = targetZoom;
-			animationFrameId = null; // Clear animation ID
-			// console.log("Animation stopped");
+			animationFrameId = null;
+			// Final background draw after snapping
+			drawBackground();
 		} else {
 			// Continue animation
 			animationFrameId = requestAnimationFrame(animateView);
@@ -501,9 +600,52 @@
 		startAnimation();
 	}
 
+	// --- Resize Logic ---
+	const debouncedResizeHandler = debounce(() => {
+		if (!browser || !viewportElement || !bgCanvasElement) return;
+
+		// Use viewport rect for consistent dimensions
+		const rect = viewportElement.getBoundingClientRect();
+		const dpr = window.devicePixelRatio || 1;
+
+		// Resize background canvas
+		bgCanvasElement.width = rect.width * dpr;
+		bgCanvasElement.height = rect.height * dpr;
+		bgCanvasElement.style.width = `${rect.width}px`;
+		bgCanvasElement.style.height = `${rect.height}px`;
+
+		// Scale background context if it exists
+		// (We reset transform in drawBackground now)
+		// if (bgCtx) { bgCtx.scale(dpr, dpr); }
+
+		// Trigger redraw via animation loop if needed, or directly
+		if (!animationFrameId) {
+			// If not animating, draw background directly
+			drawBackground();
+		} else {
+			// Animation loop will handle redraw
+		}
+	}, 50); // Debounce by 50ms
+
 	// --- Lifecycle ---
+	let resizeObserver: ResizeObserver;
+
 	onMount(() => {
 		if (!browser || !viewportElement) return;
+
+		// Get background canvas context
+		bgCanvasElement = document.getElementById('background-canvas') as HTMLCanvasElement;
+		if (bgCanvasElement) {
+			bgCtx = bgCanvasElement.getContext('2d');
+		}
+		if (!bgCtx) {
+			console.error('Failed to get background 2D context');
+			// Potentially fall back to CSS background or show error
+		}
+
+		// Use ResizeObserver on the viewport element
+		resizeObserver = new ResizeObserver(debouncedResizeHandler);
+		resizeObserver.observe(viewportElement);
 
 		// --- Add Listeners ---
 		// Mouse listeners on viewport
@@ -523,6 +665,12 @@
 		// window.addEventListener('touchend', handleTouchEndOrCancel); // Temporarily Disabled
 		// window.addEventListener('touchcancel', handleTouchEndOrCancel); // Temporarily Disabled
 		window.addEventListener('blur', handleMouseUpOrLeave); // Handles panning stop if window loses focus
+
+		// Trigger initial size calculation & background draw
+		debouncedResizeHandler();
+
+		// Start animation loop if needed (e.g., if initial state is not target)
+		startAnimation();
 
 		// Cleanup function
 		return () => {
@@ -548,6 +696,8 @@
 <button class="add-box-button" on:click={addBox}>+ Add Box</button>
 
 <div class="viewport" bind:this={viewportElement}>
+	<canvas id="background-canvas"></canvas>
+	<!-- Background Canvas -->
 	<div class="world" bind:this={worldElement} style:transform={worldTransform}>
 		{#each boxes as box (box.id)}
 			<div
@@ -565,7 +715,8 @@
 				<!-- Display dimensions -->
 				<div class="box-content">
 					{box.content}<br />
-					({Math.round(box.width)} x {Math.round(box.height)})
+					({Math.round(box.width)} x {Math.round(box.height)})<br />
+					Pos: ({Math.round(box.x)}, {Math.round(box.y)})
 				</div>
 				<!-- Resize Handles -->
 				<div class="resize-handle handle-nw" data-handle-type="nw"></div>
@@ -592,16 +743,31 @@
 		touch-action: none; /* Disable browser touch actions like scroll/zoom */
 	}
 
+	#background-canvas {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		z-index: 0; /* Behind the world */
+		background-color: #f0f0f0; /* Canvas background color */
+	}
+
 	.world {
 		position: absolute;
 		top: 0;
 		left: 0;
-		transform-origin: 0 0; /* Zoom/scale from top-left corner */
-		/* Background pattern for the infinite feel */
-		background-image:
-			linear-gradient(rgba(0, 0, 0, 0.1) 1px, transparent 1px),
-			linear-gradient(90deg, rgba(0, 0, 0, 0.1) 1px, transparent 1px);
-		background-size: 20px 20px;
+		width: 100%; /* Take up space for event handling if needed */
+		height: 100%;
+		z-index: 1; /* Above the background canvas */
+		transform-origin: 0 0;
+		/* Remove background pattern from here */
+		background-color: transparent; /* Allow background canvas to show */
+		pointer-events: none; /* Allow clicks to pass through to viewport/boxes */
+	}
+
+	.world > * {
+		pointer-events: auto; /* Re-enable pointer events for boxes */
 	}
 
 	.box {
