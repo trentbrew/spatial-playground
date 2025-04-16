@@ -11,6 +11,8 @@
 	// --- Constants ---
 	const SMOOTHING_FACTOR = 0.2;
 	const MIN_BOX_SIZE = 20;
+	const ZOOM_PADDING_FACTOR = 0.9; // Zoom to 90% of viewport size
+	const TRIPLEZOOM_DURATION = 400; // ms for fullscreen transition
 
 	// --- Utility Functions ---
 	function debounce<T extends (...args: any[]) => void>(
@@ -22,6 +24,15 @@
 			clearTimeout(timeout);
 			timeout = window.setTimeout(() => func(...args), wait);
 		};
+	}
+
+	function lerp(start: number, end: number, factor: number): number {
+		return start + (end - start) * factor;
+	}
+
+	// Easing function for smooth transitions
+	function easeInOutQuad(t: number): number {
+		return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 	}
 
 	// --- Core State ---
@@ -56,6 +67,32 @@
 	let dragStartBoxX = 0;
 	let dragStartBoxY = 0;
 
+	// Zoom-to-Box State
+	let zoomedBoxId: number | null = null;
+	let prevZoom = 1;
+	let prevOffsetX = 0;
+	let prevOffsetY = 0;
+
+	// Fullscreen State (Triple Click / Button)
+	let fullscreenBoxId: number | null = null;
+	let originalBoxState: { id: number; x: number; y: number; width: number; height: number } | null =
+		null;
+	let originalViewZoom = 1; // Store the view state before entering fullscreen
+	let originalViewOffsetX = 0;
+	let originalViewOffsetY = 0;
+
+	// State for dedicated triplezoom animation
+	let triplezoomStartTime = 0;
+	let transitionSourceZoom = 1; // View state at the start of the transition
+	let transitionSourceX = 0;
+	let transitionSourceY = 0;
+
+	// Click Tracking State
+	let clickTimer: number | undefined = undefined;
+	let clickCount = 0;
+	let lastClickedBoxId: number | null = null;
+	const CLICK_DELAY = 300; // ms threshold for multi-click
+
 	// --- Touch State ---
 	let isTouchPanning = false;
 	let lastTouchX = 0;
@@ -65,9 +102,33 @@
 	// --- Box Data ---
 	// Reactive array of boxes on the canvas
 	let boxes = [
-		{ id: 1, x: 100, y: 50, width: 150, height: 80, content: 'Box 1', color: 'lightblue' },
-		{ id: 2, x: 300, y: 200, width: 100, height: 100, content: 'Box 2 (Red)', color: 'tomato' },
-		{ id: 3, x: -50, y: 300, width: 200, height: 60, content: 'Box 3', color: 'lightblue' }
+		{
+			id: 1,
+			x: 80,
+			y: 40,
+			width: 320,
+			height: 180,
+			content: 'Widget Area (Large Layout)',
+			color: 'lightblue'
+		},
+		{
+			id: 2,
+			x: 450,
+			y: 220,
+			width: 220,
+			height: 320,
+			content: 'Sidebar / Panel',
+			color: 'tomato'
+		},
+		{
+			id: 3,
+			x: -120,
+			y: 400,
+			width: 480,
+			height: 120,
+			content: 'Toolbar / Footer',
+			color: 'lightgoldenrodyellow'
+		}
 	];
 
 	// --- Computed Styles ---
@@ -84,22 +145,81 @@
 	}
 
 	// --- Box Interaction ---
-	function handleBoxClick(boxId: number) {
-		if (!browser) return;
-		console.log(`Box clicked: ${boxId}`);
 
-		const boxIndex = boxes.findIndex((b) => b.id === boxId);
-		if (boxIndex !== -1) {
-			const currentBox = boxes[boxIndex];
-			const defaultColor = 'lightblue';
-			const clickedColor = 'lightcoral';
+	// Box Double Click (Zoom to Box)
+	function handleBoxDoubleClick(boxId: number, event: MouseEvent) {
+		if (!browser || !viewportElement) return;
+		clearTimeout(clickTimer); // Prevent single click action
+		clickCount = 0; // Reset counter
+		lastClickedBoxId = null;
+		event.stopPropagation(); // Prevent triggering viewport double-click
 
-			// Cycle color: lightblue -> lightcoral -> defaultColor (lightblue again)
-			currentBox.color = currentBox.color === clickedColor ? defaultColor : clickedColor;
-
-			// Trigger Svelte reactivity by reassigning the array
-			boxes = [...boxes];
+		// If fullscreen, exit fullscreen first, then zoom
+		if (fullscreenBoxId === boxId || fullscreenBoxId !== null) {
+			exitFullscreen();
+			// Add a small delay to allow exit animation to start before zoom animation
+			setTimeout(() => zoomToBox(boxId), 50);
+			return;
+		} else if (zoomedBoxId === boxId) {
+			// Already zoomed to this box, so restore
+			restorePreviousView();
+		} else {
+			// If zoomed to a different box, restore first
+			if (zoomedBoxId !== null) {
+				restorePreviousView();
+				// Add delay before zooming to the new box
+				setTimeout(() => zoomToBox(boxId), 50);
+			} else {
+				// Otherwise, just zoom in
+				zoomToBox(boxId);
+			}
 		}
+	}
+
+	// Restore view from Zoom-to-Box
+	function restorePreviousView() {
+		if (zoomedBoxId === null) return; // Not zoomed via double-click
+
+		targetZoom = prevZoom;
+		targetOffsetX = prevOffsetX;
+		targetOffsetY = prevOffsetY;
+		zoomedBoxId = null; // Clear the double-click zoomed state
+		startAnimation();
+	}
+
+	function handleBoxClick(boxId: number, event: MouseEvent) {
+		if (!browser) return;
+		// console.log(`Box clicked: ${boxId}`);
+
+		clearTimeout(clickTimer);
+
+		if (lastClickedBoxId !== boxId) {
+			// Reset count if clicking a different box
+			clickCount = 0;
+		}
+		lastClickedBoxId = boxId;
+		clickCount++;
+
+		clickTimer = window.setTimeout(() => {
+			if (clickCount === 1) {
+				// --- Single Click Action --- (e.g., change color)
+				console.log(`Single click on box: ${boxId}`);
+				const boxIndex = boxes.findIndex((b) => b.id === boxId);
+				if (boxIndex !== -1) {
+					const currentBox = boxes[boxIndex];
+					const defaultColor = 'lightblue';
+					const clickedColor = 'lightcoral';
+					currentBox.color = currentBox.color === clickedColor ? defaultColor : clickedColor;
+					boxes = [...boxes];
+				}
+			}
+			// Reset click count after timeout
+			clickCount = 0;
+			lastClickedBoxId = null;
+		}, CLICK_DELAY);
+
+		// Double and triple click actions are handled by their specific handlers
+		// which are called *before* the single click timeout resolves.
 	}
 
 	// --- Draw Background ---
@@ -182,41 +302,139 @@
 	}
 
 	// --- Animation Loop ---
-	function lerp(start: number, end: number, factor: number): number {
-		return start + (end - start) * factor;
-	}
-
-	function animateView() {
+	function animateView(timestamp?: number) {
+		// Add optional timestamp parameter
 		if (!browser) return;
+		const now = timestamp || performance.now(); // Use provided timestamp or get current time
 
-		// Interpolate current values towards target values
-		offsetX = lerp(offsetX, targetOffsetX, SMOOTHING_FACTOR);
-		offsetY = lerp(offsetY, targetOffsetY, SMOOTHING_FACTOR);
-		zoom = lerp(zoom, targetZoom, SMOOTHING_FACTOR);
+		// Handle dedicated triplezoom (fullscreen) animation
+		if (triplezoomStartTime > 0 && viewportElement) {
+			const progress = Math.min(1, (now - triplezoomStartTime) / TRIPLEZOOM_DURATION);
+			const easedProgress = easeInOutQuad(progress);
 
-		// Draw the background with the new intermediate values
-		drawBackground();
+			// Interpolate viewport values from source to target
+			offsetX = lerp(transitionSourceX, targetOffsetX, easedProgress);
+			offsetY = lerp(transitionSourceY, targetOffsetY, easedProgress);
+			zoom = lerp(transitionSourceZoom, targetZoom, easedProgress);
 
-		// Stop animation if very close to target to prevent infinite loop
-		const threshold = 0.01; // Small threshold for position and zoom
-		if (
-			Math.abs(offsetX - targetOffsetX) < threshold &&
-			Math.abs(offsetY - targetOffsetY) < threshold &&
-			Math.abs(zoom - targetZoom) < threshold * 0.1 // Smaller threshold for zoom
-		) {
-			// Snap to final target values
-			offsetX = targetOffsetX;
-			offsetY = targetOffsetY;
-			zoom = targetZoom;
-			animationFrameId = null;
-			// Final background draw after snapping
-			drawBackground();
+			// Interpolate box dimensions during transition
+			if (fullscreenBoxId !== null && originalBoxState) {
+				const boxIndex = boxes.findIndex((b) => b.id === fullscreenBoxId);
+				if (boxIndex > -1) {
+					const viewportWidth = viewportElement.clientWidth;
+					const viewportHeight = viewportElement.clientHeight;
+
+					// Determine start/end dimensions based on direction (entering/exiting fullscreen)
+					const startWidth = targetZoom === 1 ? originalBoxState.width : viewportWidth; // Entering: start small, Exiting: start big
+					const startHeight = targetZoom === 1 ? originalBoxState.height : viewportHeight;
+					const endWidth = targetZoom === 1 ? viewportWidth : originalBoxState.width; // Entering: end big, Exiting: end small
+					const endHeight = targetZoom === 1 ? viewportHeight : originalBoxState.height;
+
+					// Temporarily update box geometry for animation frame
+					// Use Object.assign for potentially better performance than spread in loop
+					Object.assign(boxes[boxIndex], {
+						width: lerp(startWidth, endWidth, easedProgress),
+						height: lerp(startHeight, endHeight, easedProgress),
+						// Animate position towards 0,0 when entering, and towards original when exiting
+						x: lerp(
+							targetZoom === 1 ? originalBoxState.x : 0,
+							targetZoom === 1 ? 0 : originalBoxState.x,
+							easedProgress
+						),
+						y: lerp(
+							targetZoom === 1 ? originalBoxState.y : 0,
+							targetZoom === 1 ? 0 : originalBoxState.y,
+							easedProgress
+						)
+					});
+					// No boxes = [...boxes] needed here, direct mutation is fine within animation loop
+				}
+			}
+
+			drawBackground(); // Redraw background during animation
+
+			if (progress < 1) {
+				// Continue the animation
+				animationFrameId = requestAnimationFrame(animateView);
+			} else {
+				// Animation finished: Snap to final values and clean up
+				triplezoomStartTime = 0; // Stop the dedicated animation mode
+				offsetX = targetOffsetX;
+				offsetY = targetOffsetY;
+				zoom = targetZoom;
+
+				// Ensure final box state is correct after animation
+				if (fullscreenBoxId !== null && originalBoxState) {
+					const boxIndex = boxes.findIndex((b) => b.id === fullscreenBoxId);
+					if (boxIndex > -1) {
+						// Set final dimensions and position based on whether we entered or exited
+						const finalWidth =
+							targetZoom === 1 ? viewportElement.clientWidth : originalBoxState.width;
+						const finalHeight =
+							targetZoom === 1 ? viewportElement.clientHeight : originalBoxState.height;
+						const finalX = targetZoom === 1 ? 0 : originalBoxState.x;
+						const finalY = targetZoom === 1 ? 0 : originalBoxState.y;
+
+						Object.assign(boxes[boxIndex], {
+							x: finalX,
+							y: finalY,
+							width: finalWidth,
+							height: finalHeight
+						});
+						boxes = [...boxes]; // Trigger Svelte reactivity *after* final update
+					}
+				}
+
+				// If exiting fullscreen, clear the state *after* animation completes
+				if (targetZoom !== 1 && zoom === targetZoom) {
+					// Check if we actually reached the non-fullscreen target zoom
+					fullscreenBoxId = null;
+					originalBoxState = null;
+				}
+
+				animationFrameId = null; // Stop requesting frames
+				drawBackground(); // Final background draw with exact values
+			}
 		} else {
-			// Continue animation
-			animationFrameId = requestAnimationFrame(animateView);
+			// Regular animation logic (panning, zooming, double-click zoom)
+			const oldOffsetX = offsetX;
+			const oldOffsetY = offsetY;
+			const oldZoom = zoom;
+
+			offsetX = lerp(offsetX, targetOffsetX, SMOOTHING_FACTOR);
+			offsetY = lerp(offsetY, targetOffsetY, SMOOTHING_FACTOR);
+			zoom = lerp(zoom, targetZoom, SMOOTHING_FACTOR);
+
+			// Stop animation if very close to target
+			const posThreshold = 0.1; // Allow slightly larger position threshold for snapping
+			const zoomThreshold = 0.001; // Smaller threshold for zoom snapping
+
+			if (
+				Math.abs(offsetX - targetOffsetX) < posThreshold &&
+				Math.abs(offsetY - targetOffsetY) < posThreshold &&
+				Math.abs(zoom - targetZoom) < zoomThreshold
+			) {
+				// Snap to final target values
+				offsetX = targetOffsetX;
+				offsetY = targetOffsetY;
+				zoom = targetZoom;
+				animationFrameId = null; // Stop animation
+				drawBackground(); // Final draw
+			} else {
+				// Only redraw if values actually changed significantly to avoid unnecessary draws
+				if (
+					Math.abs(offsetX - oldOffsetX) > 0.01 ||
+					Math.abs(offsetY - oldOffsetY) > 0.01 ||
+					Math.abs(zoom - oldZoom) > 0.001
+				) {
+					drawBackground();
+				}
+				// Continue animation
+				animationFrameId = requestAnimationFrame(animateView);
+			}
 		}
 
-		// Note: Svelte's reactivity on offsetX, offsetY, zoom will update the worldTransform
+		// Note: Svelte's reactivity on offsetX, offsetY, zoom updates the worldTransform automatically
 	}
 
 	function startAnimation() {
@@ -255,63 +473,92 @@
 		if (!browser) return;
 		const targetElement = event.target as Element;
 
-		// Check if starting drag
-		const dragHandleElement = targetElement.closest('.drag-handle');
-		if (dragHandleElement) {
-			const boxElement = dragHandleElement.closest('.box') as HTMLElement | null;
-			if (!boxElement) return;
-
+		// --- Click Counting Logic Integration ---
+		const boxElement = targetElement.closest('.box') as HTMLElement | null;
+		if (boxElement) {
 			const boxId = parseInt(boxElement.dataset.boxId ?? '', 10);
-			const box = boxes.find((b) => b.id === boxId);
+			if (!isNaN(boxId)) {
+				// Check if the click is on the fullscreen button first
+				if (targetElement.closest('.fullscreen-toggle-button')) {
+					// The button's own handler will manage fullscreen toggle
+					return;
+				}
 
-			if (box) {
-				isDraggingBox = true;
-				draggingBoxId = box.id;
-				dragStartMouseX = event.clientX;
-				dragStartMouseY = event.clientY;
-				dragStartBoxX = box.x;
-				dragStartBoxY = box.y;
-				console.log(`Dragging started for box ${boxId}`);
-				event.preventDefault();
-				event.stopPropagation();
-				return;
+				// Check if click is on drag/resize handles
+				const dragHandleElement = targetElement.closest('.drag-handle');
+				const resizeHandleElement = targetElement.closest('.resize-handle') as HTMLElement | null;
+
+				if (dragHandleElement && !resizeHandleElement) {
+					// --- Start Dragging --- (Existing Logic)
+					const box = boxes.find((b) => b.id === boxId);
+					if (box) {
+						isDraggingBox = true;
+						draggingBoxId = box.id;
+						dragStartMouseX = event.clientX;
+						dragStartMouseY = event.clientY;
+						dragStartBoxX = box.x;
+						dragStartBoxY = box.y;
+						console.log(`Dragging started for box ${boxId}`);
+						event.preventDefault();
+						event.stopPropagation();
+						return;
+					}
+				} else if (resizeHandleElement) {
+					// --- Start Resizing --- (Existing Logic)
+					const handleType = resizeHandleElement.dataset.handleType;
+					const box = boxes.find((b) => b.id === boxId);
+					if (box && handleType) {
+						isResizing = true;
+						resizingBoxId = box.id;
+						resizingHandleType = handleType;
+						startResizeMouseX = event.clientX;
+						startResizeMouseY = event.clientY;
+						startResizeX = box.x;
+						startResizeY = box.y;
+						startResizeWidth = box.width;
+						startResizeHeight = box.height;
+						console.log(`Resizing started for box ${boxId} with handle ${handleType}`);
+						event.preventDefault();
+						event.stopPropagation();
+						return;
+					}
+				} else {
+					// --- Handle Clicks (1, 2, 3) on Box Area (not handles) ---
+					if (lastClickedBoxId !== boxId || clickCount === 0) {
+						// If different box or count reset, start new sequence
+						clickCount = 1;
+						lastClickedBoxId = boxId;
+						clearTimeout(clickTimer);
+						clickTimer = window.setTimeout(() => {
+							handleBoxClick(boxId, event as MouseEvent); // Trigger single click action
+							clickCount = 0; // Reset after timeout
+							lastClickedBoxId = null;
+						}, CLICK_DELAY);
+					} else {
+						// Same box clicked again within delay
+						clickCount++;
+						clearTimeout(clickTimer);
+						if (clickCount === 2) {
+							handleBoxDoubleClick(boxId, event);
+							// Don't reset count immediately, wait for potential triple
+							clickTimer = window.setTimeout(() => {
+								clickCount = 0;
+								lastClickedBoxId = null;
+							}, CLICK_DELAY);
+						} else if (clickCount === 3) {
+							handleBoxTripleClick(boxId, event);
+							clickCount = 0; // Reset count immediately after triple
+							lastClickedBoxId = null;
+						}
+					}
+					// Prevent panning when clicking on a box (unless dragging starts)
+					event.stopPropagation();
+					return;
+				}
 			}
 		}
 
-		// Check if starting resize
-		const handleElement = targetElement.closest('.resize-handle') as HTMLElement | null;
-		if (handleElement) {
-			const boxElement = targetElement.closest('.box') as HTMLElement | null;
-			if (!boxElement) return;
-
-			// Find the box data and handle type using data attributes
-			const boxId = parseInt(boxElement.dataset.boxId ?? '', 10);
-			const handleType = handleElement.dataset.handleType;
-			const box = boxes.find((b) => b.id === boxId);
-
-			if (box && handleType) {
-				isResizing = true;
-				resizingBoxId = box.id;
-				resizingHandleType = handleType;
-				startResizeMouseX = event.clientX;
-				startResizeMouseY = event.clientY;
-				startResizeX = box.x;
-				startResizeY = box.y;
-				startResizeWidth = box.width;
-				startResizeHeight = box.height;
-				console.log(`Resizing started for box ${boxId} with handle ${handleType}`);
-				event.preventDefault(); // Prevent text selection, etc.
-				event.stopPropagation(); // Prevent triggering pan start on viewport
-				return; // Don't proceed to panning checks
-			}
-		}
-
-		// Check if clicking on box content (not drag or resize handle)
-		if (targetElement.closest('.box')) {
-			// Allow click for color change, but don't start pan
-			return;
-		}
-
+		// --- Fallback to Panning Logic --- (Existing Logic)
 		// Ensure click is directly on the viewport/world for panning
 		if (targetElement !== viewportElement && targetElement !== worldElement) {
 			return;
@@ -320,10 +567,8 @@
 		// Pan conditions: Middle Mouse OR (Left Mouse AND (Alt OR Space))
 		if (event.button === 1 || (event.button === 0 && (event.altKey || isSpacebarHeld))) {
 			isPanning = true;
-			// Cancel any ongoing animation when starting a direct pan
 			if (animationFrameId) cancelAnimationFrame(animationFrameId);
 			animationFrameId = null;
-			// Sync target with current state before starting drag
 			targetOffsetX = offsetX;
 			targetOffsetY = offsetY;
 			lastMouseX = event.clientX;
@@ -589,15 +834,23 @@
 		console.log('Added new box:', newBox);
 	}
 
-	// Double Click Reset
+	// Double Click Reset / Restore
 	function handleDoubleClick(event: MouseEvent) {
 		if (!browser) return;
-		// Set TARGET values for reset
-		targetZoom = 1;
-		targetOffsetX = 0;
-		targetOffsetY = 0;
-		// Start animation to smoothly reset view
-		startAnimation();
+
+		if (fullscreenBoxId !== null) {
+			// If a box is fullscreen, exit fullscreen
+			exitFullscreen();
+		} else if (zoomedBoxId !== null) {
+			// If zoomed into a box via double-click, restore previous view
+			restorePreviousView();
+		} else {
+			// Otherwise, reset to default view
+			targetZoom = 1;
+			targetOffsetX = 0;
+			targetOffsetY = 0;
+			startAnimation();
+		}
 	}
 
 	// --- Resize Logic ---
@@ -690,6 +943,117 @@
 			window.removeEventListener('blur', handleMouseUpOrLeave);
 		};
 	});
+
+	// --- Fullscreen Logic ---
+
+	function enterFullscreen(boxId: number) {
+		if (!browser || !viewportElement) return;
+		const boxIndex = boxes.findIndex((b) => b.id === boxId);
+		if (boxIndex === -1) return;
+
+		// Exit double-click zoom first if active (it uses the regular animation)
+		if (zoomedBoxId !== null) {
+			restorePreviousView();
+		}
+
+		// Store original view state *only* if not already fullscreen
+		// This preserves the view we want to return to when exiting the *first* fullscreen box
+		if (fullscreenBoxId === null) {
+			originalViewZoom = targetZoom; // Store the current target view
+			originalViewOffsetX = targetOffsetX;
+			originalViewOffsetY = targetOffsetY;
+		}
+
+		// Store the state of the box *before* it enters fullscreen
+		// If switching fullscreen from another box, grab its original state if possible
+		const boxToStore =
+			fullscreenBoxId !== null && originalBoxState ? originalBoxState : boxes[boxIndex];
+		originalBoxState = { ...boxToStore }; // Store original geometry
+
+		fullscreenBoxId = boxId; // Set the *new* fullscreen box ID
+
+		// Store the view state *right before* starting the transition animation
+		transitionSourceZoom = zoom;
+		transitionSourceX = offsetX;
+		transitionSourceY = offsetY;
+
+		// Set target view state for fullscreen
+		targetZoom = 1;
+		targetOffsetX = 0;
+		targetOffsetY = 0;
+
+		// Start the dedicated triplezoom animation
+		triplezoomStartTime = performance.now();
+		if (animationFrameId) cancelAnimationFrame(animationFrameId); // Cancel any ongoing regular animation
+		animationFrameId = requestAnimationFrame(animateView);
+	}
+
+	function exitFullscreen() {
+		if (fullscreenBoxId === null || !originalBoxState || !viewportElement) return;
+
+		// Store the view state *right before* starting the transition animation
+		transitionSourceZoom = zoom;
+		transitionSourceX = offsetX;
+		transitionSourceY = offsetY;
+
+		// Set target view state back to the original view before *any* fullscreen started
+		targetZoom = originalViewZoom;
+		targetOffsetX = originalViewOffsetX;
+		targetOffsetY = originalViewOffsetY;
+
+		// Start the dedicated triplezoom animation
+		triplezoomStartTime = performance.now();
+		if (animationFrameId) cancelAnimationFrame(animationFrameId); // Cancel any ongoing regular animation
+		animationFrameId = requestAnimationFrame(animateView);
+
+		// State clearing (fullscreenBoxId = null, originalBoxState = null)
+		// now happens inside animateView when the transition completes.
+	}
+
+	// Helper function for the actual zoom logic
+	function zoomToBox(boxId: number) {
+		const box = boxes.find((b) => b.id === boxId);
+		if (!box || !viewportElement) return;
+
+		// Store current view state as previous state for double-click restore
+		prevZoom = targetZoom;
+		prevOffsetX = targetOffsetX;
+		prevOffsetY = targetOffsetY;
+		zoomedBoxId = boxId;
+
+		// Calculate target view
+		const viewportWidth = viewportElement.clientWidth;
+		const viewportHeight = viewportElement.clientHeight;
+
+		const zoomX = (viewportWidth / box.width) * ZOOM_PADDING_FACTOR;
+		const zoomY = (viewportHeight / box.height) * ZOOM_PADDING_FACTOR;
+		const newTargetZoom = Math.min(zoomX, zoomY);
+
+		const boxCenterX = box.x + box.width / 2;
+		const boxCenterY = box.y + box.height / 2;
+
+		targetOffsetX = viewportWidth / 2 - boxCenterX * newTargetZoom;
+		targetOffsetY = viewportHeight / 2 - boxCenterY * newTargetZoom;
+		targetZoom = newTargetZoom;
+
+		startAnimation();
+	}
+
+	// Box Triple Click (Enter/Exit Fullscreen)
+	function handleBoxTripleClick(boxId: number, event: MouseEvent) {
+		if (!browser) return;
+		clearTimeout(clickTimer); // Prevent single/double click action
+		clickCount = 0; // Reset counter
+		lastClickedBoxId = null;
+		event.stopPropagation();
+
+		console.log(`Triple click on box: ${boxId}`);
+		if (fullscreenBoxId === boxId) {
+			exitFullscreen();
+		} else {
+			enterFullscreen(boxId);
+		}
+	}
 </script>
 
 <!-- Add Button outside the viewport -->
@@ -703,30 +1067,58 @@
 			<div
 				class="box"
 				data-box-id={box.id}
-				on:click={() => handleBoxClick(box.id)}
+				on:click={(event) => handleBoxClick(box.id, event as MouseEvent)}
+				on:dblclick={(event) => handleBoxDoubleClick(box.id, event)}
 				style:left="{box.x}px"
 				style:top="{box.y}px"
 				style:width="{box.width}px"
 				style:height="{box.height}px"
 				style:background-color={box.color ?? 'lightblue'}
+				style:z-index={fullscreenBoxId === box.id ? 10 : 1}
+				style:border-radius={fullscreenBoxId === box.id ? '0px' : '6px'}
 			>
-				<!-- Drag Handle -->
-				<div class="drag-handle"></div>
+				<!-- Drag Handle (hide in fullscreen) -->
+				<div class="drag-handle" style:display={fullscreenBoxId === box.id ? 'none' : 'flex'}>
+					<!-- Fullscreen Toggle Button -->
+					<button
+						class="fullscreen-toggle-button"
+						on:click|stopPropagation={(event) => {
+							// Prevent drag start if clicking button
+							event.preventDefault();
+							// Toggle fullscreen state
+							if (fullscreenBoxId === box.id) {
+								exitFullscreen();
+							} else {
+								enterFullscreen(box.id);
+							}
+						}}
+					>
+						{#if fullscreenBoxId === box.id}
+							Exit
+						{:else}
+							Full
+						{/if}
+					</button>
+				</div>
+
 				<!-- Display dimensions -->
 				<div class="box-content">
 					{box.content}<br />
 					({Math.round(box.width)} x {Math.round(box.height)})<br />
 					Pos: ({Math.round(box.x)}, {Math.round(box.y)})
 				</div>
-				<!-- Resize Handles -->
-				<div class="resize-handle handle-nw" data-handle-type="nw"></div>
-				<div class="resize-handle handle-n" data-handle-type="n"></div>
-				<div class="resize-handle handle-ne" data-handle-type="ne"></div>
-				<div class="resize-handle handle-w" data-handle-type="w"></div>
-				<div class="resize-handle handle-e" data-handle-type="e"></div>
-				<div class="resize-handle handle-sw" data-handle-type="sw"></div>
-				<div class="resize-handle handle-s" data-handle-type="s"></div>
-				<div class="resize-handle handle-se" data-handle-type="se"></div>
+
+				<!-- Resize Handles (Hide in fullscreen) -->
+				{#if fullscreenBoxId !== box.id}
+					<div class="resize-handle handle-nw" data-handle-type="nw"></div>
+					<div class="resize-handle handle-n" data-handle-type="n"></div>
+					<div class="resize-handle handle-ne" data-handle-type="ne"></div>
+					<div class="resize-handle handle-w" data-handle-type="w"></div>
+					<div class="resize-handle handle-e" data-handle-type="e"></div>
+					<div class="resize-handle handle-sw" data-handle-type="sw"></div>
+					<div class="resize-handle handle-s" data-handle-type="s"></div>
+					<div class="resize-handle handle-se" data-handle-type="se"></div>
+				{/if}
 			</div>
 		{/each}
 	</div>
@@ -773,6 +1165,7 @@
 	.box {
 		position: absolute;
 		border: 1px solid #333;
+		/* border-radius: 6px; */ /* Controlled inline now */
 		display: flex;
 		padding: 0;
 		box-sizing: border-box;
@@ -791,6 +1184,27 @@
 		flex-shrink: 0;
 		border-bottom: 1px solid #ccc;
 		box-sizing: border-box;
+		position: relative; /* Needed for absolute positioning of button */
+	}
+
+	.fullscreen-toggle-button {
+		position: absolute;
+		top: 1px;
+		right: 1px;
+		padding: 0px 3px;
+		font-size: 10px;
+		line-height: 1;
+		height: calc(100% - 2px); /* Fit within handle height */
+		background-color: rgba(0, 0, 0, 0.2);
+		color: white;
+		border: none;
+		border-radius: 2px;
+		cursor: pointer;
+		z-index: 5; /* Above drag handle */
+	}
+
+	.fullscreen-toggle-button:hover {
+		background-color: rgba(0, 0, 0, 0.4);
 	}
 
 	.box-content {
