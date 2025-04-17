@@ -123,6 +123,7 @@
 	let transitionSourceY = 0;
 	let isAnimatingFullscreen = false; // Flag for CSS transition
 	let selectedBoxId: number | null = null; // Track the selected box ID
+	let isAnimatingDoublezoom = false; // Flag for slower double-click zoom animation
 
 	// Click Tracking State
 	let clickTimer: number | undefined = undefined;
@@ -239,11 +240,13 @@
 	// Restore view from Zoom-to-Box
 	function restorePreviousView() {
 		if (zoomedBoxId === null) return; // Not zoomed via double-click
+		console.log('[restorePreviousView] Restoring view');
 
 		targetZoom = prevZoom;
 		targetOffsetX = prevOffsetX;
 		targetOffsetY = prevOffsetY;
 		zoomedBoxId = null; // Clear the double-click zoomed state
+		isAnimatingDoublezoom = true; // Use slower animation for restore
 		startAnimation();
 	}
 
@@ -416,9 +419,12 @@
 			const oldOffsetY = offsetY;
 			const oldZoom = zoom;
 
-			offsetX = lerp(offsetX, targetOffsetX, SMOOTHING_FACTOR);
-			offsetY = lerp(offsetY, targetOffsetY, SMOOTHING_FACTOR);
-			zoom = lerp(zoom, targetZoom, SMOOTHING_FACTOR);
+			// Determine smoothing factor based on context
+			const currentSmoothing = isAnimatingDoublezoom ? SMOOTHING_FACTOR / 2.5 : SMOOTHING_FACTOR;
+
+			offsetX = lerp(offsetX, targetOffsetX, currentSmoothing);
+			offsetY = lerp(offsetY, targetOffsetY, currentSmoothing);
+			zoom = lerp(zoom, targetZoom, currentSmoothing);
 
 			// Stop animation if very close to target
 			const posThreshold = 0.1; // Allow slightly larger position threshold for snapping
@@ -434,6 +440,7 @@
 				offsetY = targetOffsetY;
 				zoom = targetZoom;
 				animationFrameId = null; // Stop animation
+				isAnimatingDoublezoom = false; // Reset flag when animation completes/snaps
 				drawBackground(); // Final draw
 			} else {
 				// Only redraw if values actually changed significantly to avoid unnecessary draws
@@ -1151,6 +1158,7 @@
 	function zoomToBox(boxId: number) {
 		const box = boxes.find((b) => b.id === boxId);
 		if (!box || !viewportElement) return;
+		console.log(`[zoomToBox] Zooming to box ${boxId}`);
 
 		// Store current view state as previous state for double-click restore
 		prevZoom = targetZoom;
@@ -1173,6 +1181,7 @@
 		targetOffsetY = viewportHeight / 2 - boxCenterY * newTargetZoom;
 		targetZoom = newTargetZoom;
 
+		isAnimatingDoublezoom = true; // Use slower animation for zoom-in
 		startAnimation();
 	}
 
