@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# Project tasks
+
+## Refactor
+
+- [ ] Create `src/lib/stores/canvasStore.ts` with core state (`zoom`, `offsetX`, `offsetY`, `boxes`, `selectedBoxId`, `fullscreenBoxId`) and methods (`panBy`, `zoomTo`, `addBox`, `updateBox`, `selectBox`, `setFullscreen`).
+- [ ] Refactor `src/routes/+page.svelte` into `CanvasViewport.svelte`, wire up `canvasStore`, and set up basic viewport container.
+- [ ] Extract `BackgroundCanvas.svelte` in `src/lib/components`, move the `<canvas>` and `drawBackground` logic there, subscribe to store values, and implement throttled redraw logic.

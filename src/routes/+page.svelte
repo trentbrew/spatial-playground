@@ -4,6 +4,7 @@
 	import type { BoxState, GraphState, AppBoxState } from '$lib/canvasState'; // Import AppBoxState type
 	import { serializeCanvasState, prepareStateForLoad } from '$lib/canvasState'; // Import functions
 	import StickyNoteNode from '$lib/components/nodes/StickyNoteNode.svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte'; // Import the toggle
 
 	// --- Refs --- (Optional, but can be useful)
 	let viewportElement: HTMLDivElement;
@@ -13,7 +14,7 @@
 
 	// --- Constants ---
 	const SMOOTHING_FACTOR = 0.2;
-	const MIN_BOX_SIZE = 20;
+	const MIN_BOX_SIZE = 200; // Increased minimum size
 	const ZOOM_PADDING_FACTOR = 0.9; // Zoom to 90% of viewport size
 	const TRIPLEZOOM_DURATION = 400; // ms for fullscreen transition
 
@@ -123,7 +124,7 @@
 	let transitionSourceY = 0;
 	let isAnimatingFullscreen = false; // Flag for CSS transition
 	let selectedBoxId: number | null = null; // Track the selected box ID
-	let isAnimatingDoublezoom = false; // Flag for slower double-click zoom animation
+	let isAnimatingDoublezoom = false; // RE-ADD: Flag for slower double-click zoom animation
 
 	// Click Tracking State
 	let clickTimer: number | undefined = undefined;
@@ -145,7 +146,7 @@
 			x: 80,
 			y: 40,
 			width: 320,
-			height: 180,
+			height: 200,
 			content: 'Widget Area (Large Layout)',
 			color: 'lightblue',
 			type: 'sticky' // Default type
@@ -165,7 +166,7 @@
 			x: -120,
 			y: 400,
 			width: 480,
-			height: 120,
+			height: 200,
 			content: 'Toolbar / Footer',
 			color: 'lightgoldenrodyellow',
 			type: 'sticky' // Default type
@@ -204,43 +205,36 @@
 
 	// --- Box Interaction ---
 
-	// Box Double Click (Zoom to Box)
+	// Box Double Click (Zoom to Box) - REVISED
 	function handleBoxDoubleClick(boxId: number, event: MouseEvent) {
-		console.log(`[handleBoxDoubleClick] Fired for box ${boxId} via on:dblclick`, {
-			target: event.target
-		});
+		console.log(`[handleBoxDoubleClick] Fired for box ${boxId}`);
 		if (!browser || !viewportElement) return;
+
 		clearTimeout(clickTimer); // Prevent single click action
 		clickCount = 0; // Reset counter
 		lastClickedBoxId = null;
 		event.stopPropagation(); // Prevent triggering viewport double-click
 
-		// If fullscreen, exit fullscreen first, then zoom
-		if (fullscreenBoxId === boxId || fullscreenBoxId !== null) {
-			exitFullscreen();
-			// Add a small delay to allow exit animation to start before zoom animation
-			setTimeout(() => zoomToBox(boxId), 50);
-			return;
-		} else if (zoomedBoxId === boxId) {
-			// Already zoomed to this box, so restore
+		// If already zoomed to this box, restore the view
+		if (zoomedBoxId === boxId) {
 			restorePreviousView();
 		} else {
-			// If zoomed to a different box, restore first
+			// If zoomed to a *different* box, restore first, then zoom to new box
 			if (zoomedBoxId !== null) {
 				restorePreviousView();
-				// Add delay before zooming to the new box
+				// Use timeout to allow restore animation to start before zoom animation
 				setTimeout(() => zoomToBox(boxId), 50);
 			} else {
-				// Otherwise, just zoom in
+				// Otherwise, just zoom in to the target box
 				zoomToBox(boxId);
 			}
 		}
 	}
 
-	// Restore view from Zoom-to-Box
+	// Restore view from Zoom-to-Box - RE-ADD
 	function restorePreviousView() {
 		if (zoomedBoxId === null) return; // Not zoomed via double-click
-		console.log('[restorePreviousView] Restoring view');
+		console.log('[restorePreviousView] Restoring view from double-click zoom');
 
 		targetZoom = prevZoom;
 		targetOffsetX = prevOffsetX;
@@ -285,8 +279,8 @@
 			lastClickedBoxId = null;
 		}, CLICK_DELAY);
 
-		// Double and triple click actions are handled by their specific handlers
-		// which are called *before* the single click timeout resolves.
+		// Double click action is now handled by its specific handler (handleBoxDoubleClick)
+		// Triple click action is REMOVED
 	}
 
 	// --- Draw Background ---
@@ -341,7 +335,46 @@
 			alpha = Math.max(0, alpha * alpha);
 			if (alpha <= 0.01) continue;
 
-			ctx.fillStyle = `rgba(200, 200, 200, ${alpha})`; // #ccc with alpha
+			// Get base dot color from CSS variable
+			const computedStyle = getComputedStyle(viewportElement);
+			const baseDotColor = computedStyle.getPropertyValue('--grid-dot-color').trim();
+
+			// Attempt to parse the base color and apply the calculated alpha
+			let finalDotColor = `rgba(200, 200, 200, ${alpha})`; // Fallback
+			try {
+				// Assuming baseDotColor is like 'rgba(r, g, b, a)' or '#rgb' or '#rrggbb'
+				// This parsing is basic; a robust library might be better for complex color formats
+				let r = 200,
+					g = 200,
+					b = 200; // Default fallback values
+				if (baseDotColor.startsWith('rgba')) {
+					const parts = baseDotColor.match(/(\d+)/g);
+					if (parts && parts.length >= 3) {
+						r = parseInt(parts[0]);
+						g = parseInt(parts[1]);
+						b = parseInt(parts[2]);
+						// Ignore original alpha, use calculated alpha
+					}
+				} else if (baseDotColor.startsWith('#')) {
+					// Basic hex parsing (needs improvement for #rgb format)
+					const hex = baseDotColor.substring(1);
+					if (hex.length === 6) {
+						r = parseInt(hex.substring(0, 2), 16);
+						g = parseInt(hex.substring(2, 4), 16);
+						b = parseInt(hex.substring(4, 6), 16);
+					} else if (hex.length === 3) {
+						// Handle #rgb shorthand
+						r = parseInt(hex.substring(0, 1) + hex.substring(0, 1), 16);
+						g = parseInt(hex.substring(1, 2) + hex.substring(1, 2), 16);
+						b = parseInt(hex.substring(2, 3) + hex.substring(2, 3), 16);
+					}
+				}
+				finalDotColor = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+			} catch (e) {
+				console.warn('Could not parse CSS variable --grid-dot-color:', baseDotColor, e);
+			}
+
+			ctx.fillStyle = finalDotColor;
 
 			// Calculate the dot radius in world units to appear constant size on screen
 			const dotRadiusWorld = baseDotRadius / zoom;
@@ -419,7 +452,7 @@
 			const oldOffsetY = offsetY;
 			const oldZoom = zoom;
 
-			// Determine smoothing factor based on context
+			// Determine smoothing factor based on context (RE-ADD check for double-click animation)
 			const currentSmoothing = isAnimatingDoublezoom ? SMOOTHING_FACTOR / 2.5 : SMOOTHING_FACTOR;
 
 			offsetX = lerp(offsetX, targetOffsetX, currentSmoothing);
@@ -440,7 +473,7 @@
 				offsetY = targetOffsetY;
 				zoom = targetZoom;
 				animationFrameId = null; // Stop animation
-				isAnimatingDoublezoom = false; // Reset flag when animation completes/snaps
+				isAnimatingDoublezoom = false; // RE-ADD: Reset flag when animation completes/snaps
 				drawBackground(); // Final draw
 			} else {
 				// Only redraw if values actually changed significantly to avoid unnecessary draws
@@ -608,12 +641,12 @@
 								lastClickedBoxId = null;
 							}, CLICK_DELAY);
 						} else if (clickCount === 3) {
-							// Triple click
+							// --- Triple click REMOVED --- //
 							console.log(
-								`[handleMouseDown] Triple click detected for box ${boxId}, calling handler.`
+								`[handleMouseDown] Triple click detected for box ${boxId} - ACTION REMOVED`
 							);
-							handleBoxTripleClick(boxId, event);
-							clickCount = 0; // Reset count immediately after triple
+							// handleBoxTripleClick(boxId, event);
+							clickCount = 0; // Reset count immediately
 							lastClickedBoxId = null;
 						}
 					}
@@ -622,11 +655,15 @@
 					return;
 				}
 			}
-		} else if (targetElement === viewportElement || targetElement === worldElement) {
+		} else if (
+			targetElement === viewportElement ||
+			targetElement === worldElement ||
+			targetElement === bgCanvasElement
+		) {
 			// --- Click on Background ---
 			if (!event.metaKey) {
 				// Don't deselect if starting a Cmd+Drag create
-				console.log('[handleMouseDown] Click on background - deselecting.');
+				console.log('[handleMouseDown] Click on background/canvas - deselecting.');
 				selectedBoxId = null;
 			}
 
@@ -960,7 +997,7 @@
 			exitFullscreen();
 		} else if (zoomedBoxId !== null) {
 			// If zoomed into a box via double-click, restore previous view
-			restorePreviousView();
+			// restorePreviousView();
 		} else {
 			// Otherwise, reset to default view
 			targetZoom = 1;
@@ -996,6 +1033,116 @@
 			// Animation loop will handle redraw
 		}
 	}, 50); // Debounce by 50ms
+
+	// --- New Function: Set Box Dimensions Programmatically ---
+	function setBoxDimensions(boxId: number, newWidth: number, newHeight: number) {
+		if (!browser) return;
+
+		const boxIndex = boxes.findIndex((b) => b.id === boxId);
+		if (boxIndex === -1) {
+			console.warn(`[setBoxDimensions] Box with ID ${boxId} not found.`);
+			return;
+		}
+
+		// Validate inputs
+		if (
+			typeof newWidth !== 'number' ||
+			typeof newHeight !== 'number' ||
+			isNaN(newWidth) ||
+			isNaN(newHeight)
+		) {
+			console.warn(`[setBoxDimensions] Invalid width or height provided.`);
+			return;
+		}
+
+		const clampedWidth = Math.max(MIN_BOX_SIZE, newWidth);
+		const clampedHeight = Math.max(MIN_BOX_SIZE, newHeight);
+
+		// Update box properties
+		boxes[boxIndex] = {
+			...boxes[boxIndex],
+			width: clampedWidth,
+			height: clampedHeight
+		};
+
+		// Trigger reactivity
+		boxes = [...boxes];
+
+		console.log(`[setBoxDimensions] Resized box ${boxId} to ${clampedWidth}x${clampedHeight}`);
+	}
+
+	// --- Debug State ---
+	// let debugBoxIdInput: string = ''; // REMOVED
+	let debugWidthInput: string = '';
+	let debugHeightInput: string = '';
+
+	// REMOVED handleDebugResize function
+
+	// --- Reactive Update FOR Debug Inputs (Populate on Select) ---
+	// This block ONLY runs when selectedBoxId changes
+	$: {
+		console.log('[Debug Populate Triggered] selectedBoxId:', selectedBoxId);
+		if (selectedBoxId !== null) {
+			const selectedBox = boxes.find((box) => box.id === selectedBoxId);
+			if (selectedBox) {
+				// Unconditionally update inputs when selection changes
+				debugWidthInput = selectedBox.width.toString();
+				debugHeightInput = selectedBox.height.toString();
+				console.log('[Debug Populate] Set inputs to:', debugWidthInput, debugHeightInput);
+			} else {
+				// Box selected but somehow not found? Clear.
+				debugWidthInput = '';
+				debugHeightInput = '';
+			}
+		} else {
+			// No box selected, clear inputs
+			debugWidthInput = '';
+			debugHeightInput = '';
+			console.log('[Debug Populate] Cleared inputs');
+		}
+	}
+
+	// --- Reactive Update FROM Debug Inputs (Resize on Input Change) ---
+	// This block ONLY runs when debugWidthInput or debugHeightInput change
+	$: if (browser && selectedBoxId !== null && (debugWidthInput || debugHeightInput)) {
+		console.log('[Debug Resize Triggered] Inputs:', debugWidthInput, debugHeightInput);
+		const widthNum = parseInt(debugWidthInput, 10);
+		const heightNum = parseInt(debugHeightInput, 10);
+
+		// Find the currently selected box *at this moment*
+		const selectedBox = boxes.find((box) => box.id === selectedBoxId);
+
+		if (selectedBox) {
+			let newWidth = selectedBox.width;
+			let newHeight = selectedBox.height;
+			let changed = false;
+
+			// Check width input: must be valid number AND different from current box width
+			if (!isNaN(widthNum) && widthNum !== selectedBox.width) {
+				newWidth = widthNum; // Use the valid input number
+				changed = true;
+			}
+
+			// Check height input: must be valid number AND different from current box height
+			if (!isNaN(heightNum) && heightNum !== selectedBox.height) {
+				newHeight = heightNum; // Use the valid input number
+				changed = true;
+			}
+
+			// Only call setBoxDimensions if a valid change occurred
+			if (changed) {
+				console.log(
+					'[Debug Resize] Calling setBoxDimensions with:',
+					selectedBoxId,
+					newWidth,
+					newHeight
+				);
+				setBoxDimensions(selectedBoxId, newWidth, newHeight);
+			}
+		} else {
+			console.warn('[Debug Resize Triggered] but selected box not found?');
+		}
+	}
 
 	// --- Lifecycle ---
 	let resizeObserver: ResizeObserver;
@@ -1068,8 +1215,9 @@
 		const boxIndex = boxes.findIndex((b) => b.id === boxId);
 		if (boxIndex === -1) return;
 
-		// Exit double-click zoom first if active (it uses the regular animation)
+		// Exit double-click zoom first if active (REVISED)
 		if (zoomedBoxId !== null) {
+			console.log('[enterFullscreen] Exiting double-click zoom before entering fullscreen.');
 			restorePreviousView();
 		}
 
@@ -1093,24 +1241,35 @@
 		isAnimatingFullscreen = true; // Enable CSS transition class
 		const viewportWidth = viewportElement.clientWidth;
 		const viewportHeight = viewportElement.clientHeight;
+
+		// Get handle height from CSS variable
+		const computedStyle = getComputedStyle(viewportElement);
+		const handleHeightString = computedStyle
+			.getPropertyValue('--handle-height')
+			.trim()
+			.replace('px', '');
+		const handleHeight = parseFloat(handleHeightString) || 20; // Default to 20 if parsing fails
+
+		// Update Box State Immediately: Box takes full viewport dimensions
 		boxes[boxIndex] = {
-			...boxes[boxIndex], // Keep existing properties
-			x: 0, // Target position
-			y: 0,
-			width: viewportWidth, // Target size
-			height: viewportHeight
+			...boxes[boxIndex],
+			x: 0,
+			y: 0, // Box top remains at 0
+			width: viewportWidth,
+			height: viewportHeight // Box height takes full viewport
 		};
-		boxes = [...boxes]; // Trigger reactivity
+		boxes = [...boxes];
 
 		// --- Start JS Animation for Viewport ONLY ---
 		// Store the view state *right before* starting the transition animation
 		transitionSourceZoom = zoom;
 		transitionSourceX = offsetX;
 		transitionSourceY = offsetY;
-		// Set target view state for fullscreen
+		// Set target view state: Zoom to 1, pan so handle is just off-screen top
 		targetZoom = 1;
 		targetOffsetX = 0;
-		targetOffsetY = 0;
+		targetOffsetY = 0; // Set offset Y to 0, box is already positioned at y=0
+
 		// Start the dedicated triplezoom JS animation (for viewport)
 		triplezoomStartTime = performance.now();
 		if (animationFrameId) cancelAnimationFrame(animationFrameId); // Cancel any ongoing regular animation
@@ -1154,7 +1313,7 @@
 		// now happens inside animateView when the transition completes.
 	}
 
-	// Helper function for the actual zoom logic
+	// Helper function for the actual zoom logic - RE-ADD
 	function zoomToBox(boxId: number) {
 		const box = boxes.find((b) => b.id === boxId);
 		if (!box || !viewportElement) return;
@@ -1184,42 +1343,46 @@
 		isAnimatingDoublezoom = true; // Use slower animation for zoom-in
 		startAnimation();
 	}
-
-	// Box Triple Click (Enter/Exit Fullscreen)
-	function handleBoxTripleClick(boxId: number, event: MouseEvent) {
-		if (!browser) return;
-		console.log(`[handleBoxTripleClick] Fired for box ${boxId}`);
-		clearTimeout(clickTimer); // Prevent single/double click action
-		clickCount = 0; // Reset counter
-		lastClickedBoxId = null;
-		event.stopPropagation();
-
-		console.log(`Triple click on box: ${boxId}`);
-		if (fullscreenBoxId === boxId) {
-			exitFullscreen();
-		} else {
-			enterFullscreen(boxId);
-		}
-	}
 </script>
 
-<!-- Add Button / Back Button -->
-<button
-	class="add-box-button"
-	on:click={() => {
-		if (fullscreenBoxId !== null) {
-			exitFullscreen();
-		} else {
-			addBox();
-		}
-	}}
->
-	{#if fullscreenBoxId !== null}
-		← Back
-	{:else}
-		+ Add Box
-	{/if}
-</button>
+<!-- Add Button / Back Button / Theme Toggle -->
+<div class="controls-container">
+	<button
+		class="add-box-button"
+		on:click={() => {
+			if (fullscreenBoxId !== null) {
+				exitFullscreen();
+			} else {
+				addBox();
+			}
+		}}
+	>
+		{#if fullscreenBoxId !== null}
+			← Back
+		{:else}
+			+ Add Box
+		{/if}
+	</button>
+	<ThemeToggle />
+
+	<!-- Debug Controls -->
+	<div class="debug-controls">
+		<input
+			type="number"
+			placeholder="Width"
+			bind:value={debugWidthInput}
+			class="debug-input"
+			disabled={selectedBoxId === null}
+		/>
+		<input
+			type="number"
+			placeholder="Height"
+			bind:value={debugHeightInput}
+			class="debug-input"
+			disabled={selectedBoxId === null}
+		/>
+	</div>
+</div>
 
 <div class="viewport" bind:this={viewportElement}>
 	<canvas id="background-canvas"></canvas>
@@ -1233,8 +1396,8 @@
 					top: {drawPreviewRect.y}px;
 					width: {drawPreviewRect.width}px;
 					height: {drawPreviewRect.height}px;
-					background-color: rgba(50, 200, 50, 0.2);
-					border: 2px dashed #32c832;
+					background-color: var(--preview-bg-color); /* Use CSS var */
+					border: 2px dashed var(--preview-border-color); /* Use CSS var */
 					pointer-events: none;
 					z-index: 1000;
 				"
@@ -1258,10 +1421,10 @@
 					? 'none'
 					: 'auto'}
 				style:z-index={fullscreenBoxId === box.id ? 10 : selectedBoxId === box.id ? 5 : 1}
-				style:border-radius={fullscreenBoxId === box.id ? '0px' : '6px'}
+				style:border-radius={fullscreenBoxId === box.id ? '8px 8px 0 0' : '10px'}
 			>
 				<!-- Drag Handle -->
-				<div class="drag-handle" style:display={fullscreenBoxId === box.id ? 'none' : 'flex'}>
+				<div class="drag-handle" role="button" aria-label="Drag handle for Box {box.id}">
 					<button
 						class="fullscreen-toggle-button"
 						on:click|stopPropagation={(event) => {
@@ -1313,7 +1476,7 @@
 		height: 100vh;
 		overflow: hidden;
 		position: relative; /* Crucial for absolute positioning of world */
-		background-color: #f0f0f0; /* Background for the viewport */
+		background-color: var(--bg-color); /* Use CSS var */
 		cursor: default; /* Default cursor for the area */
 		touch-action: none; /* Disable browser touch actions like scroll/zoom */
 	}
@@ -1325,7 +1488,7 @@
 		width: 100%;
 		height: 100%;
 		z-index: 0; /* Behind the world */
-		background-color: #f0f0f0; /* Canvas background color */
+		background-color: var(--bg-canvas-color); /* Use CSS var */
 	}
 
 	.world {
@@ -1347,26 +1510,30 @@
 
 	.box {
 		position: absolute;
-		border: 1px solid #333;
-		border-radius: 6px;
+		border: 1px solid var(--box-border-color); /* Use CSS var */
+		border-radius: 10px;
 		display: flex;
-		padding: 0;
+		padding: 4px;
 		box-sizing: border-box;
 		user-select: none;
 		cursor: pointer;
 		overflow: visible;
 		flex-direction: column;
-		background-color: lightblue;
+		/* Use CSS var - Note: overridden by StickyNote color prop */
+		/* background-color: var(
+			--box-bg-color-default
+		);  */
+		background-color: var(--handle-bg-color); /* Use CSS var */
 	}
 
 	.drag-handle {
 		width: 100%;
-		height: 20px;
-		background-color: black;
-		border-radius: 6px 6px 0px 0px;
+		height: var(--handle-height); /* Use CSS var */
+		background-color: var(--handle-bg-color); /* Use CSS var */
+		border-radius: 8px 8px 0px 0px;
 		cursor: move;
 		flex-shrink: 0;
-		border-bottom: 1px solid #ccc;
+		/* border-bottom: 1px solid var(--handle-border-color);  */
 		box-sizing: border-box;
 		position: relative; /* Needed for absolute positioning of button */
 	}
@@ -1378,9 +1545,9 @@
 		padding: 0px 3px;
 		font-size: 10px;
 		line-height: 1;
-		height: calc(100% - 2px); /* Fit within handle height */
-		background-color: rgba(0, 0, 0, 0.2);
-		color: white;
+		height: calc(100% - 4px); /* Fit within handle height */
+		background-color: var(--handle-button-bg); /* Use CSS var */
+		color: var(--handle-text-color); /* Use CSS var */
 		border: none;
 		border-radius: 2px;
 		cursor: pointer;
@@ -1388,12 +1555,12 @@
 	}
 
 	.fullscreen-toggle-button:hover {
-		background-color: rgba(0, 0, 0, 0.4);
+		background-color: var(--handle-button-hover-bg); /* Use CSS var */
 	}
 
 	.box-content {
 		flex-grow: 1;
-		padding: 5px;
+		padding: 6px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1409,8 +1576,8 @@
 		position: absolute;
 		width: 10px;
 		height: 10px;
-		background-color: rgba(0, 0, 255, 0.6); /* Blue handles */
-		border: 1px solid white;
+		background-color: var(--resize-handle-bg); /* Use CSS var */
+		border: 1px solid var(--resize-handle-border); /* Use CSS var */
 		box-sizing: border-box;
 		z-index: 10; /* Ensure handles are clickable */
 	}
@@ -1463,15 +1630,22 @@
 		cursor: ew-resize;
 	}
 
-	/* Add Box Button Style */
-	.add-box-button {
-		position: fixed; /* Position relative to the browser window */
+	/* Controls Container Style */
+	.controls-container {
+		position: fixed;
 		bottom: 20px;
 		left: 20px;
-		z-index: 100; /* Ensure it's above the viewport */
+		z-index: 100;
+		display: flex;
+		gap: 10px; /* Add some space between buttons */
+		align-items: center;
+	}
+
+	/* Add Box Button Style (keep specific styles if needed) */
+	.add-box-button {
 		padding: 8px 12px;
-		background-color: #444;
-		color: white;
+		background-color: var(--control-button-bg); /* Use CSS var */
+		color: var(--control-button-text); /* Use CSS var */
 		border: none;
 		border-radius: 4px;
 		cursor: pointer;
@@ -1479,7 +1653,7 @@
 	}
 
 	.add-box-button:hover {
-		background-color: #666;
+		background-color: var(--control-button-hover-bg); /* Use CSS var */
 	}
 
 	.box-preview {
@@ -1496,7 +1670,52 @@
 	}
 
 	.box.selected {
-		border-color: #007bff; /* Blue border */
-		box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+		border-color: var(--box-selected-border-color); /* Use CSS var */
+		box-shadow: 0 0 0 2px var(--box-bg-color-selected-shadow); /* Use CSS var */
+	}
+
+	/* Debug Controls Styling */
+	.debug-controls {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		background-color: rgba(128, 128, 128, 0.1);
+		padding: 5px;
+		border-radius: 4px;
+	}
+
+	.debug-input {
+		width: 80px; /* Adjust width as needed */
+		padding: 4px 6px;
+		border: 1px solid var(--box-border-color);
+		background-color: var(--bg-color);
+		color: var(--text-color);
+		border-radius: 3px;
+		font-size: 12px;
+	}
+
+	.debug-button {
+		padding: 4px 8px;
+		background-color: var(--control-button-bg);
+		color: var(--control-button-text);
+		border: none;
+		border-radius: 3px;
+		cursor: pointer;
+		font-size: 12px;
+	}
+
+	.debug-button:hover {
+		background-color: var(--control-button-hover-bg);
+	}
+
+	/* Style disabled debug controls */
+	.debug-input:disabled,
+	.debug-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.box-preview {
+		border-radius: 6px;
 	}
 </style>

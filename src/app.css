@@ -7,3 +7,83 @@
 * {
 	font-family: 'JetBrains Mono', monospace;
 }
+
+/* Define global CSS variables for themes */
+
+:root {
+	/* Default (Light Theme) */
+	--handle-height: 20px; /* Define handle height */
+	--bg-color: #f0f0f0;
+	--bg-canvas-color: #f0f0f0;
+	--text-color: #1a1a1a;
+	--box-border-color: #333;
+	--box-bg-color-default: lightblue;
+	--box-bg-color-new: lightgreen;
+	--box-bg-color-selected-shadow: rgba(0, 123, 255, 0.5);
+	--box-selected-border-color: #007bff;
+	--handle-bg-color: black;
+	--handle-text-color: white;
+	--handle-border-color: #ccc;
+	--handle-button-bg: rgba(0, 0, 0, 0.2);
+	--handle-button-hover-bg: rgba(0, 0, 0, 0.4);
+	--grid-dot-color: rgba(200, 200, 200, 1); /* Full alpha, handled in JS */
+	--resize-handle-bg: rgba(0, 0, 255, 0.6);
+	--resize-handle-border: white;
+	--control-button-bg: #444;
+	--control-button-hover-bg: #666;
+	--control-button-text: white;
+	--preview-bg-color: rgba(50, 200, 50, 0.2);
+	--preview-border-color: #32c832;
+}
+
+[data-theme='dark'] {
+	--handle-height: 20px; /* Define handle height (consistent) */
+	--bg-color: #1a1a1a;
+	--bg-canvas-color: #242424; /* Slightly lighter than viewport bg */
+	--text-color: #f0f0f0;
+	--box-border-color: #888;
+	--box-bg-color-default: #3a4a5a; /* Darker blue */
+	--box-bg-color-new: #3a5a3a; /* Darker green */
+	--box-bg-color-selected-shadow: rgba(0, 123, 255, 0.6);
+	--box-selected-border-color: #0080ff;
+	--handle-bg-color: #333;
+	--handle-text-color: #f0f0f0;
+	--handle-border-color: #555;
+	--handle-button-bg: rgba(255, 255, 255, 0.1);
+	--handle-button-hover-bg: rgba(255, 255, 255, 0.2);
+	--grid-dot-color: rgba(80, 80, 80, 1); /* Darker dots, full alpha */
+	--resize-handle-bg: rgba(50, 100, 255, 0.7);
+	--resize-handle-border: #bbb;
+	--control-button-bg: #666;
+	--control-button-hover-bg: #888;
+	--control-button-text: #f0f0f0;
+	--preview-bg-color: rgba(50, 200, 50, 0.3);
+	--preview-border-color: #4ae04a;
+}
+
+/* Apply base background and text color */
+body {
+	background-color: var(--bg-color);
+	color: var(--text-color);
+	margin: 0;
+	font-family:
+		system-ui,
+		-apple-system,
+		BlinkMacSystemFont,
+		'Segoe UI',
+		Roboto,
+		Oxygen,
+		Ubuntu,
+		Cantarell,
+		'Open Sans',
+		'Helvetica Neue',
+		sans-serif;
+	transition:
+		background-color 0.3s ease,
+		color 0.3s ease;
+}
+
+/* Ensure textarea inherits color */
+textarea {
+	color: var(--text-color);
+}
