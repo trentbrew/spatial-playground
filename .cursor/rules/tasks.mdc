@@ -1,12 +1,35 @@
 ---
-description: 
-globs: 
+description:
+globs:
 alwaysApply: true
 ---
 # Project tasks
 
 ## Refactor
 
-- [ ] Create `src/lib/stores/canvasStore.ts` with core state (`zoom`, `offsetX`, `offsetY`, `boxes`, `selectedBoxId`, `fullscreenBoxId`) and methods (`panBy`, `zoomTo`, `addBox`, `updateBox`, `selectBox`, `setFullscreen`).
-- [ ] Refactor `src/routes/+page.svelte` into `CanvasViewport.svelte`, wire up `canvasStore`, and set up basic viewport container.
-- [ ] Extract `BackgroundCanvas.svelte` in `src/lib/components`, move the `<canvas>` and `drawBackground` logic there, subscribe to store values, and implement throttled redraw logic.
+- [x] Create `src/lib/stores/canvasStore.ts` with core state (`zoom`, `offsetX`, `offsetY`, `boxes`, `selectedBoxId`, `fullscreenBoxId`) and methods (`panBy`, `zoomTo`, `addBox`, `updateBox`, `selectBox`, `setFullscreen`).
+- [x] Scaffold `CanvasViewport.svelte` subscribing to `canvasStore` and wire up `<CanvasViewport />` in `+page.svelte`.
+- [x] Create `BackgroundCanvas.svelte` in `src/lib/components`:
+  - [x] Move the `<canvas>` element and `drawBackground` logic from `+page.svelte` into `BackgroundCanvas.svelte`.
+  - [x] Subscribe to `zoom`, `offsetX`, and `offsetY` from `canvasStore`.
+  - [x] Implement throttled or threshold-based redraw logic for performance.
+  - [x] Import and render `BackgroundCanvas` in `CanvasViewport.svelte`.
+  - [x] Remove original background canvas code and listeners from `+page.svelte`.
+- [x] Create `NodesLayer.svelte` in `src/lib/components`:
+  - [x] Scaffold basic component subscribing to `canvasStore` and computing `worldTransform`.
+  - [x] Render `<NodeContainer>` for each box from the store.
+  - [x] Import and render `NodesLayer` in `CanvasViewport.svelte`.
+- [ ] Create `NodeContainer.svelte` in `src/lib/components`:
+  - [x] Scaffold basic component subscribing to `canvasStore` and applying selected/fullscreen classes.
+  - [x] Add click and double-click event handlers to call `canvasStore.selectBox()` and fullscreen/zoom actions.
+  - [x] Render node-specific content (use `<svelte:component>` map) and style handles.
+  - [x] Import and render `NodeContainer` in `NodesLayer.svelte`.
+- [ ] Extract interaction actions:
+  - [x] Create `lib/interactions/panning.ts` Svelte action and hook to viewport in `CanvasViewport.svelte`.
+  - [x] Create `lib/interactions/zooming.ts` Svelte action for wheel zoom.
+  - [x] Create `lib/interactions/boxDragging.ts` Svelte action for moving nodes.
+  - [x] Hook `boxDragging` action into `NodeContainer.svelte`.
+  - [x] Create `lib/interactions/boxResizing.ts` Svelte action for resizing nodes.
+  - [x] Hook `boxResizing` action into `NodeContainer.svelte`.
+  - [x] Create `lib/interactions/multiClick.ts` Svelte action for single/double click differentiation.
+  - [x] Hook `multiClick` action into `NodeContainer.svelte`.

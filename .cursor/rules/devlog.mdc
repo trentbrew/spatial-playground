@@ -1,0 +1,44 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+# Your rule content
+
+- You can @ files here
+- You can use markdown but dont have to
+
+# Devlog
+
+## 2024-06-XX - Refactor Kickoff
+
+- Created `src/lib/stores/canvasStore.ts` with core view state (`zoom`, `offsetX`, `offsetY`), layout state (`boxes`), and methods (`panBy`, `zoomTo`, `addBox`, `updateBox`, `selectBox`, `setFullscreen`).
+- Scaffolded `CanvasViewport.svelte` to subscribe to `canvasStore` and simplified `+page.svelte` to render only `<CanvasViewport />`.
+- Defined sub-tasks for `BackgroundCanvas.svelte` extraction: moving `<canvas>` & `drawBackground` logic, hooking store subscriptions, implementing redraw throttling, and cleanup of original route code.
+
+### Notes & Next Steps
+
+- Ensure we wrap DOM APIs in `onMount` or `if (browser)` guards as we pull logic out of routes.
+- Plan to use Svelte's `derived` store for `worldTransform` to keep templates lean.
+- Next: build `BackgroundCanvas.svelte`, test redraw performance, then wire into `CanvasViewport`.
+
+## 2024-06-XX - Nodes & Containers
+
+- Scaffoled `NodesLayer.svelte`, subscribed to `canvasStore`, and rendered `<NodeContainer>` instances.
+- Implemented SSR guard in `BackgroundCanvas.svelte` to defer store subscriptions until `onMount` and prevent `requestAnimationFrame` errors during SSR.
+
+### Notes & Next Steps
+
+- Next: flesh out `NodeContainer.svelte` with event handlers for selection and fullscreen toggles.
+- Plan: extract panning and box interactions into Svelte actions for cleaner separation.
+
+## 2024-06-XX - Interaction Actions
+
+- Created `lib/interactions/panning.ts` action and hooked it up in `CanvasViewport.svelte` for viewport panning.
+- Created `lib/interactions/zooming.ts` action and hooked it up in `CanvasViewport.svelte` for wheel zooming.
+- Created `lib/interactions/boxDragging.ts` action and hooked it up in `NodeContainer.svelte` for box dragging.
+- Implemented `lib/interactions/multiClick.ts` action and used it in `NodeContainer.svelte` for single vs double click handling.
+
+### Notes & Next Steps
+
+- All core interaction actions now in place. Ready to refine or add ControlsOverlay.
