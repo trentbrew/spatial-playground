@@ -42,3 +42,22 @@ alwaysApply: true
 ### Notes & Next Steps
 
 - All core interaction actions now in place. Ready to refine or add ControlsOverlay.
+
+## 2024-06-XX - Interaction Refinements & Fullscreen Debugging
+
+- Implemented fullscreen constraints in interaction actions (`panning.ts`, `zooming.ts`, `boxDragging.ts`) using `get(canvasStore)` to disable background interactions when a box is fullscreen.
+- Added dedicated double-click handler to drag handle in `NodeContainer.svelte` to allow exiting fullscreen by double-clicking handle, while disabling exit on double-clicking content.
+- Implemented background click deselection in `CanvasViewport.svelte` using `element.closest()` check.
+- Added `lastSelectedBoxId` to `canvasStore.ts` and updated `NodeContainer.svelte` to use it for z-index, keeping the last selected box on top.
+- Replaced `multiClick` action in `NodeContainer.svelte` with standard `on:click` and `on:dblclick` for instant selection feedback.
+- Updated `boxDragging.ts` action to select the box on `mousedown`/`touchstart` for immediate visual feedback.
+- Enabled 8-way resize handles in `NodeContainer.svelte` and implemented corresponding logic in `boxResizing.ts` (including basic touch support).
+- Fixed abrupt fullscreen exit animation by reverting box animation to be purely CSS-driven (updating state immediately in `exitFullscreen` in `canvasStore.ts` and removing JS interpolation from `animateView` in `CanvasViewport.svelte`), closer to `LEGACY.md` approach.
+- Resolved issue where interactions remained disabled after exiting fullscreen by ensuring `startAnimation` in `CanvasViewport.svelte` cancels existing frames and always requests a new one if needed.
+- Added viewport state display (Zoom, X, Y) to `ControlsOverlay.svelte`.
+- Fixed `ReferenceError: unsubZoom is not defined` in `boxDragging.ts` by correcting the `destroy` function cleanup.
+
+### Notes & Next Steps
+
+- Core interactions and fullscreen logic are now stable and feel responsive.
+- Next steps could involve implementing the `Add Box` functionality, adding more node types, or refining the UI/styling.
