@@ -29,6 +29,9 @@ Good move.Let's extend this intentional naming convention to other interactions 
 - **Single Click Color Toggle →** **NodeBlink**
   _Short, evocative description of instant visual toggle._
 
+- **Single Click Zoomed Node Pan →** **QuickFocus**
+  _Emphasizes the speed and convenience of switching focus with a single click when zoomed._
+
 ---
 
 These terms ground each interaction in an expressive ontology, making discussion clearer, more intuitive, and distinctly yours.

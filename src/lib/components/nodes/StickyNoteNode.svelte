@@ -13,7 +13,7 @@
 	$: contrastingTextColor = getTextColorForBackground(color);
 </script>
 
-<div class="sticky-note-content outline-none" style="background-color: {color};">
+<div id={String(id)} class="sticky-note-content outline-none" style="background-color: {color};">
 	<textarea
 		bind:value={content}
 		placeholder="Write something..."

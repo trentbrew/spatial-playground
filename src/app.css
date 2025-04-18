@@ -24,16 +24,19 @@
 	--handle-bg-color: black;
 	--handle-text-color: white;
 	--handle-border-color: #ccc;
-	--handle-button-bg: rgba(0, 0, 0, 0.2);
-	--handle-button-hover-bg: rgba(0, 0, 0, 0.4);
-	--grid-dot-color: rgba(200, 200, 200, 1); /* Full alpha, handled in JS */
-	--resize-handle-bg: rgba(0, 0, 255, 0.6);
-	--resize-handle-border: white;
+	--handle-button-bg: #e0e0e0;
+	--handle-button-hover-bg: #d0d0d0;
+	--handle-bg-quickfocus-active: #d8d8d8; /* Slightly darker */
+	--handle-text-color: #333;
+	--resize-handle-bg: #fff;
+	--resize-handle-border: #999;
 	--control-button-bg: #444;
 	--control-button-hover-bg: #666;
 	--control-button-text: white;
 	--preview-bg-color: rgba(50, 200, 50, 0.2);
 	--preview-border-color: #32c832;
+	--quickfocus-indicator-color: rgba(0, 123, 255, 0.3); /* Semi-transparent selection color */
+	--grid-dot-color: rgba(200, 200, 200, 1); /* Full alpha, handled in JS */
 }
 
 [data-theme='dark'] {
@@ -49,16 +52,19 @@
 	--handle-bg-color: #333;
 	--handle-text-color: #f0f0f0;
 	--handle-border-color: #555;
-	--handle-button-bg: rgba(255, 255, 255, 0.1);
-	--handle-button-hover-bg: rgba(255, 255, 255, 0.2);
-	--grid-dot-color: rgba(80, 80, 80, 1); /* Darker dots, full alpha */
-	--resize-handle-bg: rgba(50, 100, 255, 0.7);
-	--resize-handle-border: #bbb;
+	--handle-button-bg: #5a5a5a;
+	--handle-button-hover-bg: #6a6a6a;
+	--handle-bg-quickfocus-active: #484848; /* Slightly darker */
+	--handle-text-color: #eee;
+	--resize-handle-bg: #333;
+	--resize-handle-border: #888;
 	--control-button-bg: #666;
 	--control-button-hover-bg: #888;
 	--control-button-text: #f0f0f0;
 	--preview-bg-color: rgba(50, 200, 50, 0.3);
 	--preview-border-color: #4ae04a;
+	--quickfocus-indicator-color: rgba(0, 128, 255, 0.3); /* Semi-transparent dark selection color */
+	--grid-dot-color: rgba(80, 80, 80, 1); /* Darker dots, full alpha */
 }
 
 /* Apply base background and text color */
@@ -86,4 +92,11 @@ body {
 /* Ensure textarea inherits color */
 textarea {
 	color: var(--text-color);
+}
+
+/* Ensure html and body fill the viewport for 100% height children */
+html,
+body {
+	height: 100%;
+	margin: 0;
 }
