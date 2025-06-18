@@ -120,7 +120,7 @@ function generateRandomBoxes(): AppBoxState[] {
 		'#6C5CE7'
 	];
 
-	const nodeTypes = ['sticky', 'image', 'text', 'code'];
+	const nodeTypes = ['sticky', 'image', 'embed', 'text', 'code'];
 	const boxes: AppBoxState[] = [];
 
 	// Create a diverse set of nodes across different depths with collision avoidance
@@ -155,7 +155,7 @@ function generateRandomBoxes(): AppBoxState[] {
 			height: Math.round(height),
 			color,
 			content,
-			type: type as 'sticky' | 'image' | 'text' | 'code',
+			type: type as 'sticky' | 'image' | 'embed' | 'text' | 'code',
 			z
 		});
 	}
@@ -476,10 +476,9 @@ export const canvasStore = {
 			// Clear any ghosted nodes when deselecting
 			this.clearGhostedNodes();
 
-			// Also restore previous zoom if we were zoomed in
-			if (zoomedBoxId !== null) {
-				this.restorePreviousZoom();
-			}
+			// Clear zoomed state but keep the current zoom level (don't auto zoom-out)
+			// Users can manually zoom out if they want to
+			zoomedBoxId = null;
 		}
 	},
 
@@ -601,18 +600,32 @@ export const canvasStore = {
 		// 2. Get the target zoom for the box's z-plane to be in focus
 		const newTargetZoom = getFocusZoomForZ(z);
 
-		// 3. Calculate offsets to perfectly center the box at the target zoom level
-		// Formula: to center point P at zoom Z in viewport of size V:
-		// offset = (viewport_center) - (world_point * zoom)
-		let newTargetOffsetX = viewportWidth / 2 - boxCenterX * newTargetZoom;
-		let newTargetOffsetY = viewportHeight / 2 - boxCenterY * newTargetZoom;
+		// 3. Account for parallax and intrinsic scaling effects
+		// Use the same depth utilities that are used in rendering
+		const parallaxFactor = getParallaxFactor(z);
+		const intrinsicScale = getIntrinsicScaleFactor(z);
+		const effectiveScale = newTargetZoom * intrinsicScale;
+
+		// 4. Calculate offsets accounting for parallax effects
+		// The parallax correction needs to be considered in the centering calculation
+		const parallaxCorrectionX = (viewportWidth / 2) * (1 - parallaxFactor);
+		const parallaxCorrectionY = (viewportHeight / 2) * (1 - parallaxFactor);
+
+		// Calculate the base offset needed to center the box
+		const baseOffsetX = viewportWidth / 2 - boxCenterX * effectiveScale;
+		const baseOffsetY = viewportHeight / 2 - boxCenterY * effectiveScale;
+
+		// Apply inverse parallax correction to the base offset
+		let newTargetOffsetX = (baseOffsetX - parallaxCorrectionX) / parallaxFactor;
+		let newTargetOffsetY = (baseOffsetY - parallaxCorrectionY) / parallaxFactor;
 
 		console.log(
-			`🎯 Zoom to Box ${boxId}:`,
+			`🎯 Zoom to Box ${boxId} with Parallax Correction:`,
 			`\n  Box: (${x}, ${y}) ${width}x${height} Z:${z}`,
 			`\n  Box Center: (${boxCenterX.toFixed(1)}, ${boxCenterY.toFixed(1)})`,
 			`\n  Viewport: ${viewportWidth}x${viewportHeight}`,
 			`\n  Viewport Center: (${(viewportWidth / 2).toFixed(1)}, ${(viewportHeight / 2).toFixed(1)})`,
+			`\n  Depth Effects: Parallax=${parallaxFactor.toFixed(3)}, Intrinsic=${intrinsicScale.toFixed(3)}, Effective=${effectiveScale.toFixed(3)}`,
 			`\n  Current: zoom=${zoom.toFixed(2)} offset=(${offsetX.toFixed(1)}, ${offsetY.toFixed(1)})`,
 			`\n  Target: zoom=${newTargetZoom.toFixed(2)} offset=(${newTargetOffsetX.toFixed(1)}, ${newTargetOffsetY.toFixed(1)})`
 		);
@@ -664,15 +677,19 @@ export const canvasStore = {
 		animationDuration = FOCUS_TRANSITION_DURATION; // Use a constant for smooth animation
 
 		// 6. Verify the calculation by checking where the box center will appear after animation
-		const finalBoxScreenX = boxCenterX * newTargetZoom + newTargetOffsetX;
-		const finalBoxScreenY = boxCenterY * newTargetZoom + newTargetOffsetY;
+		// Apply the same parallax and scaling transformations that will be used in rendering
+		const finalParallaxOffsetX = newTargetOffsetX * parallaxFactor + parallaxCorrectionX;
+		const finalParallaxOffsetY = newTargetOffsetY * parallaxFactor + parallaxCorrectionY;
+		const finalBoxScreenX = boxCenterX * effectiveScale + finalParallaxOffsetX;
+		const finalBoxScreenY = boxCenterY * effectiveScale + finalParallaxOffsetY;
 		const expectedCenterX = viewportWidth / 2;
 		const expectedCenterY = viewportHeight / 2;
 
 		console.log(
-			`📐 Verification: Box center will appear at screen (${finalBoxScreenX.toFixed(1)}, ${finalBoxScreenY.toFixed(1)})`,
+			`📐 Enhanced Verification: Box center will appear at screen (${finalBoxScreenX.toFixed(1)}, ${finalBoxScreenY.toFixed(1)})`,
 			`\n  Expected center: (${expectedCenterX.toFixed(1)}, ${expectedCenterY.toFixed(1)})`,
-			`\n  Error: (${(finalBoxScreenX - expectedCenterX).toFixed(1)}, ${(finalBoxScreenY - expectedCenterY).toFixed(1)})`
+			`\n  Error: (${(finalBoxScreenX - expectedCenterX).toFixed(1)}, ${(finalBoxScreenY - expectedCenterY).toFixed(1)})`,
+			`\n  Z: ${z}, Parallax: ${parallaxFactor.toFixed(3)}, IntrinsicScale: ${intrinsicScale.toFixed(3)}, EffectiveScale: ${effectiveScale.toFixed(3)}`
 		);
 	},
 
@@ -977,5 +994,42 @@ export const canvasStore = {
 		}, 500); // 500ms flash duration
 
 		console.log(`💥 Box ${boxId} hit the Z-boundary with visual and audio feedback`);
+	},
+
+	// Delete a box from the canvas
+	deleteBox(boxId: number) {
+		const boxIndex = boxes.findIndex((box) => box.id === boxId);
+		if (boxIndex === -1) return;
+
+		// Remove the box from the array
+		boxes.splice(boxIndex, 1);
+
+		// Clear selection if the deleted box was selected
+		if (selectedBoxId === boxId) {
+			selectedBoxId = null;
+		}
+
+		// Clear last selected if it was this box
+		if (lastSelectedBoxId === boxId) {
+			lastSelectedBoxId = null;
+		}
+
+		// Clear dragging state if this box was being dragged
+		if (draggingBoxId === boxId) {
+			draggingBoxId = null;
+		}
+
+		// Remove from ghosted nodes if it was ghosted
+		if (ghostedBoxIds.has(boxId)) {
+			ghostedBoxIds.delete(boxId);
+			ghostedBoxIds = new Set(ghostedBoxIds); // Trigger reactivity
+		}
+
+		// Exit fullscreen if this box was fullscreen
+		if (fullscreenBoxId === boxId) {
+			this.exitFullscreen();
+		}
+
+		console.log(`🗑️ Deleted box ${boxId}`);
 	}
 };

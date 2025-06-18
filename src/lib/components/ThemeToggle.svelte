@@ -6,7 +6,7 @@
 	}
 </script>
 
-<button on:click={toggleTheme} aria-label="Toggle theme">
+<button on:click={toggleTheme} data-cursor="button" aria-label="Toggle theme">
 	{#if $theme === 'light'}
 		<span>🌙</span> <!-- Show moon icon for switching to dark -->
 	{:else}

@@ -13,6 +13,20 @@
 	import TracingIndicator from './TracingIndicator.svelte';
 	import ObstructionIndicator from './ObstructionIndicator.svelte';
 	import SceneStats from './SceneStats.svelte';
+	import ContextMenu from './ContextMenu.svelte';
+	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
+	// Lucide icons - ignore TS type errors via global declaration
+	// @ts-ignore
+	import {
+		StickyNote,
+		Code,
+		Image as ImageIcon,
+		Globe,
+		Clipboard,
+		ZoomIn,
+		Target,
+		Shuffle
+	} from '@lucide/svelte';
 
 	// --- Constants ---
 	const SMOOTHING_FACTOR = 0.4;
@@ -224,12 +238,231 @@
 
 	// --- Event Handlers ---
 	function handleViewportClick(event: MouseEvent) {
-		// Deselect box if the click didn't originate from a node box or the controls overlay
+		// Close context menu on any click
+		contextMenuStore.hide();
+
+		// Deselect box if the click didn't originate from a node box, resize handle, or the controls overlay
 		const targetElement = event.target as Element;
-		if (!targetElement.closest('.box') && !targetElement.closest('.controls-overlay')) {
+		if (
+			!targetElement.closest('.box') &&
+			!targetElement.closest('.resize-handle') &&
+			!targetElement.closest('.controls-overlay')
+		) {
 			// Deselect the current box, no dimensions needed for deselect
 			canvasStore.selectBox(null);
 		}
+	}
+
+	function handleViewportRightClick(event: MouseEvent) {
+		// Only handle background right-clicks (not on nodes)
+		const targetElement = event.target as Element;
+		if (targetElement.closest('.box')) {
+			return; // Let the node handle its own context menu
+		}
+
+		event.preventDefault();
+		event.stopPropagation();
+
+		// Convert screen coordinates to world coordinates
+		const rect = viewportElement.getBoundingClientRect();
+		const screenX = event.clientX - rect.left;
+		const screenY = event.clientY - rect.top;
+
+		// Convert to world coordinates accounting for zoom and offset
+		const worldX = (screenX - offsetX) / zoom;
+		const worldY = (screenY - offsetY) / zoom;
+
+		// Generate background context menu items
+		const items: ContextMenuItem[] = [
+			{
+				id: 'add-note',
+				label: 'Add Note',
+				icon: StickyNote
+			},
+			{
+				id: 'add-code',
+				label: 'Add Code Block',
+				icon: Code
+			},
+			{
+				id: 'add-image',
+				label: 'Add Image',
+				icon: ImageIcon
+			},
+			{
+				id: 'add-embed',
+				label: 'Add Embed',
+				icon: Globe
+			},
+			{ id: 'sep1', label: '', separator: true },
+			{
+				id: 'paste',
+				label: 'Paste',
+				icon: Clipboard,
+				disabled: true // TODO: implement clipboard detection
+			},
+			{ id: 'sep2', label: '', separator: true },
+			{
+				id: 'zoom-fit',
+				label: 'Zoom to Fit All',
+				icon: ZoomIn
+			},
+			{
+				id: 'center-view',
+				label: 'Center View',
+				icon: Target
+			},
+			{ id: 'sep3', label: '', separator: true },
+			{
+				id: 'regenerate',
+				label: 'Regenerate Scene',
+				icon: Shuffle
+			}
+		];
+
+		// Show context menu at click position with world coordinates
+		contextMenuStore.show(event.clientX, event.clientY, items, undefined, worldX, worldY);
+	}
+
+	function handleContextMenuSelect(event: CustomEvent<{ itemId: string; targetId?: number }>) {
+		const { itemId, targetId } = event.detail;
+		const viewportWidth = viewportElement?.clientWidth || 0;
+		const viewportHeight = viewportElement?.clientHeight || 0;
+
+		// Handle node-specific actions
+		if (targetId) {
+			const box = boxes.find((b) => b.id === targetId);
+			if (!box) return;
+
+			switch (itemId) {
+				case 'focus':
+					canvasStore.selectBox(targetId, viewportWidth, viewportHeight);
+					canvasStore.zoomToBox(targetId, viewportWidth, viewportHeight);
+					break;
+				case 'duplicate':
+					// Create a new box slightly offset from the original
+					const newBox = {
+						...box,
+						id: Date.now(), // Simple ID generation
+						x: box.x + 20,
+						y: box.y + 20
+					};
+					canvasStore.addBox(newBox);
+					break;
+				case 'bring-forward':
+					// First select the box, then move it forward
+					canvasStore.selectBox(targetId, viewportWidth, viewportHeight);
+					canvasStore.moveSelectedForward(viewportWidth, viewportHeight);
+					break;
+				case 'send-backward':
+					// First select the box, then move it backward
+					canvasStore.selectBox(targetId, viewportWidth, viewportHeight);
+					canvasStore.moveSelectedBackward(viewportWidth, viewportHeight);
+					break;
+				case 'delete':
+					canvasStore.deleteBox(targetId);
+					break;
+			}
+		} else {
+			// Handle background actions
+			const worldX = contextMenuStore.worldX || 0;
+			const worldY = contextMenuStore.worldY || 0;
+
+			switch (itemId) {
+				case 'add-note':
+					createNewNode('note', worldX, worldY);
+					break;
+				case 'add-code':
+					createNewNode('code', worldX, worldY);
+					break;
+				case 'add-image':
+					triggerImageUpload(worldX, worldY);
+					break;
+				case 'add-embed':
+					createNewNode('embed', worldX, worldY);
+					break;
+				case 'zoom-fit':
+					zoomToFitAll();
+					break;
+				case 'center-view':
+					centerView();
+					break;
+				case 'regenerate':
+					canvasStore.regenerateScene();
+					break;
+			}
+		}
+	}
+
+	function createNewNode(type: string, worldX: number, worldY: number) {
+		const newBox = {
+			id: Date.now(),
+			x: worldX - 100, // Center the 200px wide box on click point
+			y: worldY - 75, // Center the 150px tall box on click point
+			width: 200,
+			height: 150,
+			z: 0, // Start at focus plane
+			content: getDefaultContent(type),
+			color: getRandomColor(),
+			type: type
+		};
+
+		canvasStore.addBox(newBox);
+
+		// Select and focus the new node
+		const viewportWidth = viewportElement?.clientWidth || 0;
+		const viewportHeight = viewportElement?.clientHeight || 0;
+		canvasStore.selectBox(newBox.id, viewportWidth, viewportHeight);
+		canvasStore.zoomToBox(newBox.id, viewportWidth, viewportHeight);
+	}
+
+	function getDefaultContent(type: string): string {
+		switch (type) {
+			case 'note':
+				return 'New note...';
+			case 'code':
+				return '// New code block\nconsole.log("Hello, world!");';
+			case 'image':
+				return 'Image placeholder';
+			case 'embed':
+				return 'https://example.com';
+			default:
+				return 'New content';
+		}
+	}
+
+	function getRandomColor(): string {
+		const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff'];
+		return colors[Math.floor(Math.random() * colors.length)];
+	}
+
+	function zoomToFitAll() {
+		if (boxes.length === 0) return;
+
+		const bbox = calculateBoundingBox(boxes);
+		if (!bbox) return;
+
+		const viewportWidth = viewportElement?.clientWidth || 0;
+		const viewportHeight = viewportElement?.clientHeight || 0;
+		const optimalView = calculateOptimalViewport(bbox, viewportWidth, viewportHeight);
+
+		// Animate to the optimal view
+		canvasStore.setTargetViewportAnimated(optimalView, 500);
+	}
+
+	function centerView() {
+		// Reset to center with current zoom
+		const viewportWidth = viewportElement?.clientWidth || 0;
+		const viewportHeight = viewportElement?.clientHeight || 0;
+
+		canvasStore.setTargetViewportAnimated(
+			{
+				zoom: zoom,
+				x: viewportWidth / 2,
+				y: viewportHeight / 2
+			},
+			300
+		);
 	}
 
 	// Keyboard event handler for Z-axis management
@@ -308,6 +541,112 @@
 
 		return { zoom: newZoom, x: newOffsetX, y: newOffsetY };
 	}
+
+	// ---------------- Image Upload ----------------
+	let fileInput: HTMLInputElement | null = null;
+	let pendingWorldX = 0;
+	let pendingWorldY = 0;
+
+	function triggerImageUpload(worldX: number, worldY: number) {
+		pendingWorldX = worldX;
+		pendingWorldY = worldY;
+		if (fileInput) {
+			// reset so change fires even if same file selected twice
+			fileInput.value = '';
+			fileInput.click();
+		}
+	}
+
+	function handleFileInputChange(event: Event) {
+		const target = event.target as HTMLInputElement;
+		if (!target.files || target.files.length === 0) return;
+		const file = target.files[0];
+		if (!file.type.startsWith('image/')) return;
+
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			const dataUrl = e.target?.result as string;
+			if (!dataUrl) return;
+			createImageNodeFromDataUrl(dataUrl, pendingWorldX, pendingWorldY);
+		};
+		reader.readAsDataURL(file);
+	}
+
+	async function createImageNodeFromDataUrl(dataUrl: string, worldX: number, worldY: number) {
+		const { width: imgW, height: imgH } = await loadImageDimensions(dataUrl);
+
+		const MAX_DIM = 400;
+		const scale = Math.min(1, MAX_DIM / Math.max(imgW, imgH));
+		const boxWidth = Math.round(imgW * scale);
+		const boxHeight = Math.round(imgH * scale);
+
+		const newBox = {
+			id: Date.now(),
+			x: worldX - boxWidth / 2,
+			y: worldY - boxHeight / 2,
+			width: boxWidth,
+			height: boxHeight,
+			z: 0,
+			content: dataUrl,
+			color: getRandomColor(),
+			type: 'image'
+		};
+		canvasStore.addBox(newBox);
+
+		const viewportWidth = viewportElement?.clientWidth || 0;
+		const viewportHeight = viewportElement?.clientHeight || 0;
+		canvasStore.selectBox(newBox.id, viewportWidth, viewportHeight);
+		canvasStore.zoomToBox(newBox.id, viewportWidth, viewportHeight);
+	}
+
+	function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+			img.onerror = reject;
+			img.src = src;
+		});
+	}
+
+	// ---------------- Drag & Drop ----------------
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault(); // necessary to allow drop
+	}
+
+	function handleDrop(event: DragEvent) {
+		event.preventDefault();
+
+		if (!viewportElement) return;
+
+		// Calculate world coordinates of drop
+		const rect = viewportElement.getBoundingClientRect();
+		const screenX = event.clientX - rect.left;
+		const screenY = event.clientY - rect.top;
+		const worldX = (screenX - offsetX) / zoom;
+		const worldY = (screenY - offsetY) / zoom;
+
+		// If files present and first is image
+		if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+			const file = Array.from(event.dataTransfer.files).find((f) => f.type.startsWith('image/'));
+			if (file) {
+				const reader = new FileReader();
+				reader.onload = (e) => {
+					const dataUrl = e.target?.result as string;
+					if (dataUrl) createImageNodeFromDataUrl(dataUrl, worldX, worldY);
+				};
+				reader.readAsDataURL(file);
+				return;
+			}
+		}
+
+		// Otherwise check for image URL in transfer data
+		const uriList = event.dataTransfer?.getData('text/uri-list');
+		const textData = event.dataTransfer?.getData('text/plain');
+		const url = uriList || textData;
+		if (url && url.match(/\.(png|jpe?g|gif|bmp|webp|svg)(\?.*)?$/i)) {
+			createImageNodeFromDataUrl(url, worldX, worldY);
+		}
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -318,7 +657,10 @@
 	use:panning
 	use:zooming
 	onclick={handleViewportClick}
+	oncontextmenu={handleViewportRightClick}
 	onkeydown={handleKeyDown}
+	ondragover={handleDragOver}
+	ondrop={handleDrop}
 	tabindex="0"
 >
 	<BackgroundCanvas />
@@ -329,6 +671,31 @@
 <TracingIndicator />
 <ObstructionIndicator />
 <SceneStats />
+
+<!-- Context Menu -->
+<ContextMenu
+	visible={contextMenuStore.visible}
+	x={contextMenuStore.x}
+	y={contextMenuStore.y}
+	worldX={contextMenuStore.worldX}
+	worldY={contextMenuStore.worldY}
+	{zoom}
+	{offsetX}
+	{offsetY}
+	items={contextMenuStore.items}
+	targetId={contextMenuStore.targetId}
+	on:select={handleContextMenuSelect}
+	on:close={() => contextMenuStore.hide()}
+/>
+
+<!-- Hidden file input for image uploads -->
+<input
+	type="file"
+	accept="image/*"
+	bind:this={fileInput}
+	onchange={handleFileInputChange}
+	style="display: none;"
+/>
 
 <style>
 	.viewport {

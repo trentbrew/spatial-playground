@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
-	import { boxDragging } from '$lib/interactions/boxDragging';
 	import { boxResizing } from '$lib/interactions/boxResizing';
-	import type { AppBoxState } from '$lib/canvasState';
 	import { nodeComponentMap } from '$lib/components/nodeComponentMap';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 	import { FOCUS_TRANSITION_DURATION } from '$lib/constants';
 	import { isNodeClickable } from '$lib/utils/depth';
+	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
+	import type { AppBoxState } from '$lib/canvasState';
 
 	// Use $props() rune for component props
 	let { box }: { box: AppBoxState } = $props();
@@ -54,6 +54,15 @@
 	function handleClick(event: MouseEvent) {
 		console.log(`[NodeContainer] Clicked box id: ${box.id}`, box);
 
+		// Check if this box is already selected and zoomed (focused)
+		const isAlreadyFocused = selectedBoxId === box.id && zoomedBoxId === box.id;
+
+		if (isAlreadyFocused) {
+			// If already focused, don't zoom - just allow interaction with content
+			console.log(`[NodeContainer] Box ${box.id} already focused, allowing content interaction`);
+			return;
+		}
+
 		// Always select the box first
 		canvasStore.selectBox(box.id);
 
@@ -70,6 +79,46 @@
 	function handleDoubleClick(event: MouseEvent) {
 		// A double click will now restore the previous zoom level (zoom out)
 		canvasStore.restorePreviousZoom();
+	}
+
+	function handleRightClick(event: MouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+
+		// Generate context menu items based on node state
+		const items: ContextMenuItem[] = [
+			{
+				id: 'focus',
+				label: 'Focus Node',
+				icon: '🎯',
+				disabled: selectedBoxId === box.id && zoomedBoxId === box.id
+			},
+			{
+				id: 'duplicate',
+				label: 'Duplicate',
+				icon: '📋'
+			},
+			{ id: 'sep1', label: '', separator: true },
+			{
+				id: 'bring-forward',
+				label: 'Bring Forward',
+				icon: '⬆️'
+			},
+			{
+				id: 'send-backward',
+				label: 'Send Backward',
+				icon: '⬇️'
+			},
+			{ id: 'sep2', label: '', separator: true },
+			{
+				id: 'delete',
+				label: 'Delete',
+				icon: '🗑️'
+			}
+		];
+
+		// Show context menu at mouse position
+		contextMenuStore.show(event.clientX, event.clientY, items, box.id);
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
@@ -104,6 +153,11 @@
 			canvasStore.enterFullscreen(box.id, viewportWidth, viewportHeight);
 		}
 	}
+
+	function handleClose(event: MouseEvent) {
+		event.stopPropagation(); // Prevent box selection
+		canvasStore.deleteBox(box.id);
+	}
 </script>
 
 <div
@@ -112,11 +166,13 @@
 	tabindex="0"
 	onclick={handleClick}
 	ondblclick={handleDoubleClick}
+	oncontextmenu={handleRightClick}
 	onkeydown={handleKeyDown}
 	class:selected={selectedBoxId === box.id}
 	class:fullscreen={fullscreenBoxId === box.id}
 	class:fullscreen-transition={isAnimatingFullscreen && fullscreenBoxId === box.id}
 	class:quick-focus-active={zoomedBoxId === box.id && currentZoom > 1.0}
+	class:edit-mode={selectedBoxId === box.id && zoomedBoxId === box.id}
 	class:ghosted={isGhosted}
 	class:boundary-hit={isBoundaryHit}
 	class:non-clickable={!isClickable && !isGhosted}
@@ -147,26 +203,20 @@
 		role="button"
 		tabindex="0"
 		title="Drag to move"
-		use:boxDragging={box.id}
+		data-cursor="grab"
+		onclick={(e) => e.stopPropagation()}
 		ondblclick={handleDragHandleDoubleClick}
 		onkeydown={handleDragHandleKeyDown}
 	>
-		<!-- Z-index indicator -->
-		<div class="z-indicator" class:background={box.z < 0} class:foreground={box.z > 0}>
-			Z: {box.z}
-			{#if box.z < 0}
-				<span class="depth-effects">
-					({(1 + box.z * 0.15).toFixed(2)}x, {(Math.abs(box.z) * 1.5).toFixed(1)}px blur)
-				</span>
-			{/if}
-		</div>
-
+		<!-- Close button in top-right -->
 		<button
-			class="fullscreen-toggle-button"
-			onclick={toggleFullscreen}
-			ondblclick={(e) => e.stopPropagation()}
+			class="close-button"
+			data-cursor="close-button"
+			onclick={handleClose}
+			title="Close"
+			aria-label="Close node"
 		>
-			{#if fullscreenBoxId === box.id}Exit{:else}Full{/if}
+			×
 		</button>
 	</div>
 
@@ -180,70 +230,17 @@
 	/>
 
 	{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
-		<!-- Resize Handles -->
-		<div
-			class="resize-handle handle-n"
-			role="button"
-			tabindex="0"
-			data-handle-type="n"
-			use:boxResizing={box.id}
-			onkeydown={(e) => e.stopPropagation()}
-		></div>
-		<div
-			class="resize-handle handle-ne"
-			role="button"
-			tabindex="0"
-			data-handle-type="ne"
-			use:boxResizing={box.id}
-			onkeydown={(e) => e.stopPropagation()}
-		></div>
-		<div
-			class="resize-handle handle-e"
-			role="button"
-			tabindex="0"
-			data-handle-type="e"
-			use:boxResizing={box.id}
-			onkeydown={(e) => e.stopPropagation()}
-		></div>
+		<!-- Single corner resize handle (bottom-right) -->
 		<div
 			class="resize-handle handle-se"
 			role="button"
 			tabindex="0"
 			data-handle-type="se"
+			data-cursor="resize"
 			use:boxResizing={box.id}
 			onkeydown={(e) => e.stopPropagation()}
-		></div>
-		<div
-			class="resize-handle handle-s"
-			role="button"
-			tabindex="0"
-			data-handle-type="s"
-			use:boxResizing={box.id}
-			onkeydown={(e) => e.stopPropagation()}
-		></div>
-		<div
-			class="resize-handle handle-sw"
-			role="button"
-			tabindex="0"
-			data-handle-type="sw"
-			use:boxResizing={box.id}
-			onkeydown={(e) => e.stopPropagation()}
-		></div>
-		<div
-			class="resize-handle handle-w"
-			role="button"
-			tabindex="0"
-			data-handle-type="w"
-			use:boxResizing={box.id}
-			onkeydown={(e) => e.stopPropagation()}
-		></div>
-		<div
-			class="resize-handle handle-nw"
-			role="button"
-			tabindex="0"
-			data-handle-type="nw"
-			use:boxResizing={box.id}
-			onkeydown={(e) => e.stopPropagation()}
+			title="Resize"
+			aria-label="Resize node"
 		></div>
 	{/if}
 </div>
@@ -286,59 +283,79 @@
 		flex-shrink: 0;
 		border-radius: 8px 8px 0px 0px;
 		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		padding-right: 8px;
 	}
-	.resize-handle {
+
+	.close-button {
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		padding: 2px;
+		width: 16px;
+		transform: translateY(-2px);
+		height: 16px;
+		aspect-ratio: 1/1;
+		border-radius: 4px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		opacity: 0.6;
+		transition:
+			opacity 0.2s ease,
+			background-color 0.2s ease;
+		color: var(--text-color, #666);
+	}
+
+	.close-button:hover {
+		opacity: 1;
+		background-color: rgba(255, 0, 0, 0.1);
+		color: #ff4444;
+	}
+	/* Single corner resize handle (bottom-right) - curved corner style */
+	.resize-handle.handle-se {
 		position: absolute;
-		width: 10px;
-		height: 10px;
-		background-color: var(--resize-handle-bg);
-		border: 1px solid var(--resize-handle-border);
-		box-sizing: border-box;
-		z-index: 10;
-	}
-	.handle-nw {
-		top: -5px;
-		left: -5px;
+		bottom: -4px;
+		right: -4px;
 		cursor: nwse-resize;
+		width: 32px;
+		height: 32px;
+		background: transparent;
+		border: none;
+		overflow: hidden;
+		z-index: 15;
+		opacity: 1;
+		pointer-events: auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
 	}
-	.handle-ne {
-		top: -5px;
-		right: -5px;
-		cursor: nesw-resize;
+
+	.resize-handle.handle-se svg {
+		display: block;
+		width: 32px;
+		height: 32px;
+		background: rgba(40, 40, 40, 0.95);
+		border-radius: 8px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+		transition:
+			opacity 0.2s ease,
+			background-color 0.2s ease,
+			box-shadow 0.2s ease;
+		color: #fff;
+		opacity: 0.95;
+		pointer-events: none;
 	}
-	.handle-sw {
-		bottom: -5px;
-		left: -5px;
-		cursor: nesw-resize;
-	}
-	.handle-se {
-		bottom: -5px;
-		right: -5px;
-		cursor: nwse-resize;
-	}
-	.handle-n {
-		top: -5px;
-		left: 50%;
-		transform: translateX(-50%);
-		cursor: ns-resize;
-	}
-	.handle-s {
-		bottom: -5px;
-		left: 50%;
-		transform: translateX(-50%);
-		cursor: ns-resize;
-	}
-	.handle-w {
-		top: 50%;
-		left: -5px;
-		transform: translateY(-50%);
-		cursor: ew-resize;
-	}
-	.handle-e {
-		top: 50%;
-		right: -5px;
-		transform: translateY(-50%);
-		cursor: ew-resize;
+
+	/* Subtle hover effect for curved handle */
+	.resize-handle.handle-se:hover::before {
+		opacity: 1;
+		border-bottom-color: var(--resize-handle-hover-border, rgba(255, 255, 255, 1));
+		border-right-color: var(--resize-handle-hover-border, rgba(255, 255, 255, 1));
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 	}
 	.box.selected {
 		border: 2px solid var(--box-selected-border-color);
@@ -447,6 +464,29 @@
 	.box.non-clickable:hover {
 		/* Remove hover effects for non-clickable nodes */
 		filter: brightness(0.9) contrast(0.8);
+	}
+
+	/* Edit mode - node is focused and ready for content interaction */
+	.box.edit-mode {
+		/* Subtle visual indication that the node is in edit mode */
+		border-color: rgba(74, 144, 226, 0.6);
+		box-shadow:
+			0 0 0 2px rgba(74, 144, 226, 0.3),
+			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
+				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.05));
+	}
+
+	.box.edit-mode .drag-handle {
+		/* TODO Make this a floating toolbar: */
+	}
+
+	/* Change cursor for content area when in edit mode */
+	.box.edit-mode {
+		cursor: text; /* Indicate that content can be edited */
+	}
+
+	.box.edit-mode .drag-handle {
+		cursor: move; /* Keep move cursor for drag handle */
 	}
 
 	/* Boundary hit animation - red flash with springy bounce when hitting Z=0 boundary */

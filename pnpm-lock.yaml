@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@lucide/svelte':
+        specifier: ^0.517.0
+        version: 0.517.0(svelte@5.27.0)
     devDependencies:
       '@sveltejs/adapter-vercel':
         specifier: ^5.6.3
@@ -385,6 +389,11 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.25':
     resolution: {integrity: sha512-vNk6aEwybGtawWmy/PzwnGDOjCkLWSD2wqvjGGAgOAwCGWySYXfYoxt00IJkTF+8Lb57DwOb3Aa0o9CApepiYQ==}
+
+  '@lucide/svelte@0.517.0':
+    resolution: {integrity: sha512-abTsvzeGxCAZY2HnFO8XOYlZDaWtBmg9R4C/sioAlhkxfRRn3oaCvxIYH5/KcBnWsvxXtWW17+snejkKCh0O+g==}
+    peerDependencies:
+      svelte: ^5
 
   '@mapbox/node-pre-gyp@2.0.0':
     resolution: {integrity: sha512-llMXd39jtP0HpQLVI37Bf1m2ADlEb35GYSh1SDSLsBhR+5iCxiNGlT31yqbNtVHygHAtMy6dWFERpU2JgufhPg==}
@@ -1581,6 +1590,10 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
+
+  '@lucide/svelte@0.517.0(svelte@5.27.0)':
+    dependencies:
+      svelte: 5.27.0
 
   '@mapbox/node-pre-gyp@2.0.0':
     dependencies:

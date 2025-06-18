@@ -134,9 +134,10 @@
 </script>
 
 <div class="controls-container">
-	<button class="control-button" onclick={handleAddBox}> + Add Box </button>
+	<button class="control-button" data-cursor="button" onclick={handleAddBox}> + Add Box </button>
 	<button
 		class="control-button regenerate-button"
+		data-cursor="button"
 		onclick={handleRegenerateScene}
 		title="Generate new random scene"
 	>
@@ -147,9 +148,15 @@
 	<!-- Zoom Controls -->
 	<div class="zoom-controls">
 		<span class="zoom-label">🔍</span>
-		<button class="zoom-preset" onclick={() => setZoomPreset(0.25)} title="25%">¼</button>
-		<button class="zoom-preset" onclick={() => setZoomPreset(0.5)} title="50%">½</button>
-		<button class="zoom-preset" onclick={() => setZoomPreset(1)} title="100%">1</button>
+		<button class="zoom-preset" data-cursor="button" onclick={() => setZoomPreset(0.25)} title="25%"
+			>¼</button
+		>
+		<button class="zoom-preset" data-cursor="button" onclick={() => setZoomPreset(0.5)} title="50%"
+			>½</button
+		>
+		<button class="zoom-preset" data-cursor="button" onclick={() => setZoomPreset(1)} title="100%"
+			>1</button
+		>
 		<input
 			type="range"
 			min="0.1"
@@ -206,13 +213,13 @@
 	</div>
 
 	<!-- Keyboard Shortcuts Hint -->
-	{#if selectedBoxId !== null}
+	<!-- {#if selectedBoxId !== null}
 		<div class="shortcuts-hint">
 			<div class="shortcuts-title">Depth Controls:</div>
 			<div class="shortcut">⌘ + ] : Move Forward</div>
 			<div class="shortcut">⌘ + [ : Move Backward</div>
 		</div>
-	{/if}
+	{/if} -->
 </div>
 
 <style>
