@@ -51,8 +51,42 @@
 	}
 
 	function handleAddBox() {
-		// TODO: Implement addBox logic similar to legacy or refine
-		console.log('Add box clicked - Placeholder');
+		const colors = [
+			'#FF6B6B',
+			'#4ECDC4',
+			'#45B7D1',
+			'#96CEB4',
+			'#FECA57',
+			'#FF9FF3',
+			'#54A0FF',
+			'#5F27CD',
+			'#00D2D3',
+			'#FF9F43'
+		];
+		const nodeTypes = ['sticky', 'image', 'text', 'code'] as const;
+
+		// Create a new box with random properties
+		const newId = Math.max(...boxes.map((b) => b.id), 0) + 1;
+		const color = colors[Math.floor(Math.random() * colors.length)];
+		const type = nodeTypes[Math.floor(Math.random() * nodeTypes.length)];
+		const width = 150 + Math.random() * 100;
+		const height = 120 + Math.random() * 80;
+		const z = Math.floor(Math.random() * 4) - 3; // Z from -3 to 0
+
+		const newBox = {
+			id: newId,
+			x: 0, // Will be updated by collision avoidance
+			y: 0, // Will be updated by collision avoidance
+			width: Math.round(width),
+			height: Math.round(height),
+			color,
+			content: `New ${type.charAt(0).toUpperCase() + type.slice(1)} ${newId}`,
+			type,
+			z
+		};
+
+		// Add with collision avoidance enabled
+		canvasStore.addBox(newBox, true);
 	}
 
 	function handleRegenerateScene() {
@@ -71,11 +105,31 @@
 		const target = event.target as HTMLInputElement;
 		const newZoom = parseFloat(target.value);
 		canvasStore.setZoom(newZoom);
+
+		// Refresh ghosting when zoom changes
+		const viewport = document.querySelector('.viewport') as HTMLElement;
+		if (viewport) {
+			const width = viewport.clientWidth;
+			const height = viewport.clientHeight;
+			if (width > 0 && height > 0) {
+				canvasStore.onViewChange(width, height);
+			}
+		}
 	}
 
 	// Zoom presets
 	function setZoomPreset(zoomLevel: number) {
 		canvasStore.setZoom(zoomLevel);
+
+		// Refresh ghosting when zoom changes
+		const viewport = document.querySelector('.viewport') as HTMLElement;
+		if (viewport) {
+			const width = viewport.clientWidth;
+			const height = viewport.clientHeight;
+			if (width > 0 && height > 0) {
+				canvasStore.onViewChange(width, height);
+			}
+		}
 	}
 </script>
 

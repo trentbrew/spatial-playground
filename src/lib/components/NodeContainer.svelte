@@ -7,6 +7,7 @@
 	import { nodeComponentMap } from '$lib/components/nodeComponentMap';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 	import { FOCUS_TRANSITION_DURATION } from '$lib/constants';
+	import { isNodeClickable } from '$lib/utils/depth';
 
 	// Use $props() rune for component props
 	let { box }: { box: AppBoxState } = $props();
@@ -40,6 +41,9 @@
 	// Check if this box is ghosted or hit the boundary
 	const isGhosted = $derived(ghostedBoxIds.has(box.id));
 	const isBoundaryHit = $derived(boundaryHitBoxId === box.id);
+
+	// Check if this node should be clickable based on focus state
+	const isClickable = $derived(isNodeClickable(box.z, currentZoom));
 
 	const Component = nodeComponentMap[box.type] || nodeComponentMap['sticky'];
 
@@ -115,6 +119,7 @@
 	class:quick-focus-active={zoomedBoxId === box.id && currentZoom > 1.0}
 	class:ghosted={isGhosted}
 	class:boundary-hit={isBoundaryHit}
+	class:non-clickable={!isClickable && !isGhosted}
 	style:left="{box.x}px"
 	style:top="{box.y}px"
 	style:width="{box.width}px"
@@ -132,7 +137,9 @@
 		? 'none'
 		: fullscreenBoxId !== null && box.id !== fullscreenBoxId
 			? 'none'
-			: 'auto'}
+			: !isClickable
+				? 'none'
+				: 'auto'}
 >
 	<!-- Drag handle placeholder -->
 	<div
@@ -255,12 +262,21 @@
 		overflow: visible;
 		flex-direction: column;
 		background-color: var(--handle-bg-color);
-		/* Add transitions for smooth visual changes */
+		/* Add transitions for smooth visual changes including Z-axis depth effects */
 		transition:
 			border-color 0.2s ease-out,
-			box-shadow 0.2s ease-out;
-		/* Add subtle box-shadow based on Z-index for depth perception */
+			box-shadow 0.2s ease-out,
+			filter 0.3s ease-out,
+			transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+		/* Add subtle visual effects based on Z-index for depth perception */
 		filter: brightness(calc(1 + var(--z-brightness, 0)));
+		/* Subtle scale effect based on Z-depth for enhanced depth perception */
+		transform: scale(calc(1 + var(--z-brightness, 0) * 0.5));
+		/* Dynamic depth shadow that grows with Z-index (background = larger shadow) */
+		box-shadow:
+			0 0 0 1px var(--box-border-color),
+			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
+				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.05));
 	}
 	.drag-handle {
 		width: 100%;
@@ -326,17 +342,22 @@
 	}
 	.box.selected {
 		border: 2px solid var(--box-selected-border-color);
-		box-shadow: 0 0 0 2px var(--box-bg-color-selected-shadow);
+		/* Enhanced selected state that preserves depth shadow */
+		box-shadow:
+			0 0 0 2px var(--box-bg-color-selected-shadow),
+			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
+				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.05));
 	}
 	.box.fullscreen {
 		border-radius: 8px 8px 0 0;
 	}
 
 	.box.quick-focus-active {
-		/* Use box-shadow for an outline that doesn't affect layout */
-		box-shadow: 0 0 0 4px var(--quickfocus-indicator-color);
-		/* Optionally slightly change border too if desired */
-		/* border-color: var(--box-selected-border-color); */
+		/* Enhanced focus state that preserves depth shadow */
+		box-shadow:
+			0 0 0 4px var(--quickfocus-indicator-color),
+			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
+				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.05));
 	}
 
 	.fullscreen-toggle-button {
@@ -381,7 +402,13 @@
 		font-family: monospace;
 		user-select: none;
 		z-index: 2;
-		transition: all 0.2s ease;
+		/* Enhanced smooth transitions for Z-axis changes */
+		transition:
+			background-color 0.3s ease-out,
+			border-color 0.3s ease-out,
+			color 0.3s ease-out,
+			transform 0.3s ease-out,
+			box-shadow 0.3s ease-out;
 	}
 
 	.z-indicator.background {
@@ -410,12 +437,27 @@
 		transition: opacity 0.3s ease-out;
 	}
 
+	/* Non-clickable nodes - out of focus foreground nodes that you can click through */
+	.box.non-clickable {
+		cursor: default;
+		/* Subtle visual hint that the node is non-interactive */
+		filter: brightness(0.9) contrast(0.8);
+	}
+
+	.box.non-clickable:hover {
+		/* Remove hover effects for non-clickable nodes */
+		filter: brightness(0.9) contrast(0.8);
+	}
+
 	/* Boundary hit animation - red flash with springy bounce when hitting Z=0 boundary */
 	.box.boundary-hit {
 		border-color: #ff4444 !important;
+		/* Preserve depth shadow while adding boundary hit effect */
 		box-shadow:
 			0 0 0 4px rgba(255, 68, 68, 0.5),
-			0 0 20px rgba(255, 68, 68, 0.3) !important;
+			0 0 20px rgba(255, 68, 68, 0.3),
+			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
+				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.05)) !important;
 		animation:
 			boundary-flash 0.5s ease-out,
 			boundary-spring 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -442,25 +484,25 @@
 
 	@keyframes boundary-spring {
 		0% {
-			transform: scale(1) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 1)) translateZ(0);
 		}
 		15% {
-			transform: scale(0.95) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 0.95)) translateZ(0);
 		}
 		30% {
-			transform: scale(1.05) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 1.05)) translateZ(0);
 		}
 		45% {
-			transform: scale(0.98) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 0.98)) translateZ(0);
 		}
 		60% {
-			transform: scale(1.02) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 1.02)) translateZ(0);
 		}
 		75% {
-			transform: scale(0.99) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 0.99)) translateZ(0);
 		}
 		100% {
-			transform: scale(1) translateZ(0);
+			transform: scale(calc(1 + var(--z-brightness, 0) * 0.5)) translateZ(0);
 		}
 	}
 </style>

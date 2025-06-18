@@ -77,6 +77,15 @@
 		// Update the actual viewport state in the store
 		canvasStore._setViewport({ zoom: newZoom, x: newOffsetX, y: newOffsetY });
 
+		// Refresh ghosting as the view changes
+		if (viewportElement) {
+			const viewportWidth = viewportElement.clientWidth;
+			const viewportHeight = viewportElement.clientHeight;
+			if (viewportWidth > 0 && viewportHeight > 0) {
+				canvasStore.onViewChange(viewportWidth, viewportHeight);
+			}
+		}
+
 		// Check for convergence (progress >= 1)
 		if (progress >= 1) {
 			// Snap to final target values and stop animation
@@ -166,6 +175,11 @@
 				const { width, height } = entries[0].contentRect;
 				viewportWidthStore.set(width);
 				viewportHeightStore.set(height);
+
+				// Refresh ghosting when viewport size changes
+				if (width > 0 && height > 0) {
+					canvasStore.onViewChange(width, height);
+				}
 			}
 		});
 		if (viewportElement) {

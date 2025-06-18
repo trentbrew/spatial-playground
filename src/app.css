@@ -36,7 +36,6 @@
 	--preview-bg-color: rgba(50, 200, 50, 0.2);
 	--preview-border-color: #32c832;
 	--quickfocus-indicator-color: rgba(0, 123, 255, 0.3); /* Semi-transparent selection color */
-	--grid-dot-color: rgba(200, 200, 200, 1); /* Full alpha, handled in JS */
 }
 
 [data-theme='dark'] {
@@ -64,7 +63,6 @@
 	--preview-bg-color: rgba(50, 200, 50, 0.3);
 	--preview-border-color: #4ae04a;
 	--quickfocus-indicator-color: rgba(0, 128, 255, 0.3); /* Semi-transparent dark selection color */
-	--grid-dot-color: rgba(80, 80, 80, 1); /* Darker dots, full alpha */
 }
 
 /* Apply base background and text color */

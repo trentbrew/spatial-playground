@@ -16,6 +16,10 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 
 	let handleType = ''; // Store handle type being dragged
 
+	// Track viewport dimensions for ghosting refresh
+	let viewportWidth = 0;
+	let viewportHeight = 0;
+
 	function handleMouseDown(event: MouseEvent) {
 		if (event.button !== 0) return;
 		handleType = (node.dataset.handleType || '').toLowerCase();
@@ -24,6 +28,13 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 		isResizing = true;
 		startX = event.clientX;
 		startY = event.clientY;
+
+		// Get viewport dimensions for ghosting refresh
+		const viewportEl = node.closest('.viewport');
+		if (viewportEl) {
+			viewportWidth = viewportEl.clientWidth;
+			viewportHeight = viewportEl.clientHeight;
+		}
 
 		// Get initial box dimensions
 		const box = canvasStore.boxes.find((b) => b.id === boxId);
@@ -50,6 +61,13 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 		isResizing = true;
 		startX = event.touches[0].clientX;
 		startY = event.touches[0].clientY;
+
+		// Get viewport dimensions for ghosting refresh
+		const viewportEl = node.closest('.viewport');
+		if (viewportEl) {
+			viewportWidth = viewportEl.clientWidth;
+			viewportHeight = viewportEl.clientHeight;
+		}
 
 		// Get initial box dimensions
 		const box = canvasStore.boxes.find((b) => b.id === boxId);
@@ -134,6 +152,12 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 	function handleMouseUp() {
 		if (!isResizing) return;
 		isResizing = false;
+
+		// Refresh ghosting after resizing ends, since box size changed
+		if (viewportWidth > 0 && viewportHeight > 0) {
+			canvasStore.onViewChange(viewportWidth, viewportHeight);
+		}
+
 		window.removeEventListener('mousemove', handleMouseMove);
 		window.removeEventListener('touchmove', handleTouchMove);
 		window.removeEventListener('mouseup', handleMouseUp);

@@ -1,4 +1,4 @@
-import { FOCAL_PLANE_TARGET_SCALE } from '$lib/constants';
+import { FOCAL_PLANE_TARGET_SCALE, DOF_SHARPNESS_FACTOR } from '$lib/constants';
 
 /**
  * Calculates the zoom level at which a given z-plane is perfectly in focus.
@@ -58,4 +58,34 @@ export const getParallaxFactor = (z: number): number => {
 		// Formula: 1.0 + 0.3 * z gives us: Z+1=1.3, Z+2=1.6, Z+3=1.9
 		return 1.0 + 0.3 * z;
 	}
+};
+
+/**
+ * Determines if a node should be clickable based on its focus state.
+ * Nodes that are significantly out of focus (high z-index foreground nodes)
+ * should have pointer-events disabled so users can click through them.
+ *
+ * @param z - The z-index of the layer
+ * @param zoom - The current global zoom level
+ * @returns true if the node should be clickable, false if it should be click-through
+ */
+export const isNodeClickable = (z: number, zoom: number): boolean => {
+	// Background nodes (z < 0) are always clickable when visible
+	if (z <= 0) return true;
+
+	// Calculate the effective scale of this layer
+	const intrinsicScale = getIntrinsicScaleFactor(z);
+	const totalEffectiveScale = zoom * intrinsicScale;
+
+	// Calculate how far this layer is from the ideal focal plane
+	const focusDelta = Math.abs(FOCAL_PLANE_TARGET_SCALE - totalEffectiveScale);
+
+	// Calculate blur amount using the same formula as the visual effects
+	const blurAmount = Math.min(16, focusDelta * DOF_SHARPNESS_FACTOR);
+
+	// If the node is significantly blurred (more than 3px), make it non-clickable
+	// This threshold can be adjusted based on UX preferences
+	const BLUR_THRESHOLD = 3.0;
+
+	return blurAmount <= BLUR_THRESHOLD;
 };

@@ -59,7 +59,7 @@ function findNonOverlappingPosition(
 	targetBox: { width: number; height: number; z: number },
 	existingBoxes: AppBoxState[],
 	maxAttempts: number = 50,
-	padding: number = 30
+	padding: number = 50
 ): { x: number; y: number } {
 	const sameZBoxes = existingBoxes.filter((box) => box.z === targetBox.z);
 
@@ -137,7 +137,7 @@ function generateRandomBoxes(): AppBoxState[] {
 			{ width: Math.round(width), height: Math.round(height), z },
 			boxes,
 			50, // max attempts
-			30 // padding between boxes
+			50 // padding between boxes (increased for better spacing)
 		);
 
 		const color = colors[Math.floor(Math.random() * colors.length)];
@@ -160,13 +160,13 @@ function generateRandomBoxes(): AppBoxState[] {
 		});
 	}
 
-	// Add a few strategic test nodes - some overlapping to test obstruction detection
+	// Add a few strategic test nodes - all using collision avoidance
 	// Background test node (non-overlapping)
 	const testNode1Position = findNonOverlappingPosition(
 		{ width: 220, height: 180, z: -1 },
 		boxes,
 		50,
-		30
+		50
 	);
 	boxes.push({
 		id: 26,
@@ -180,38 +180,49 @@ function generateRandomBoxes(): AppBoxState[] {
 		z: -1 // Background - will zoom in to 1.67x
 	});
 
-	// Foreground test nodes (deliberately overlapping to test ghosting)
-	boxes.push(
-		{
-			id: 27,
-			x: 350,
-			y: 230,
-			width: 160,
-			height: 140,
-			color: '#4ECDC4',
-			content: 'Overlapping Front',
-			type: 'image',
-			z: 0 // Foreground - will zoom in to 1.5x
-		},
-		{
-			id: 28,
-			x: 320,
-			y: 250,
-			width: 180,
-			height: 120,
-			color: '#45B7D1',
-			content: 'Another Overlay',
-			type: 'text',
-			z: 0 // Foreground - will zoom in to 1.5x
-		}
+	// Foreground test nodes (using collision avoidance)
+	const testNode2Position = findNonOverlappingPosition(
+		{ width: 160, height: 140, z: 0 },
+		boxes,
+		50,
+		50
 	);
+	boxes.push({
+		id: 27,
+		x: testNode2Position.x,
+		y: testNode2Position.y,
+		width: 160,
+		height: 140,
+		color: '#4ECDC4',
+		content: 'Front Node',
+		type: 'image',
+		z: 0 // Foreground - will zoom in to 1.5x
+	});
+
+	const testNode3Position = findNonOverlappingPosition(
+		{ width: 180, height: 120, z: 0 },
+		boxes,
+		50,
+		50
+	);
+	boxes.push({
+		id: 28,
+		x: testNode3Position.x,
+		y: testNode3Position.y,
+		width: 180,
+		height: 120,
+		color: '#45B7D1',
+		content: 'Another Node',
+		type: 'text',
+		z: 0 // Foreground - will zoom in to 1.5x
+	});
 
 	// Add a special test node at Z=0 for testing boundary hit
 	const boundaryTestPosition = findNonOverlappingPosition(
 		{ width: 200, height: 150, z: 0 },
 		boxes,
 		50,
-		30
+		50
 	);
 	boxes.push({
 		id: 29,
@@ -417,7 +428,7 @@ export const canvasStore = {
 				{ width: box.width, height: box.height, z: box.z },
 				boxes,
 				50, // max attempts
-				30 // padding
+				50 // padding (increased for better spacing)
 			);
 
 			// Create the final box with the collision-free position
@@ -848,6 +859,14 @@ export const canvasStore = {
 		draggingBoxId = boxId;
 	},
 
+	// Force clear dragging state (for debugging/emergency cleanup)
+	clearDragging() {
+		if (draggingBoxId !== null) {
+			console.log(`🧹 Force clearing dragging state for Box ${draggingBoxId}`);
+			draggingBoxId = null;
+		}
+	},
+
 	// Center a box in the viewport with smooth animation
 	centerBox(boxId: number, viewportWidth: number, viewportHeight: number) {
 		const box = boxes.find((b) => b.id === boxId);
@@ -901,6 +920,18 @@ export const canvasStore = {
 
 			// Trigger reactivity by creating a new Set
 			ghostedBoxIds = new Set(ghostedBoxIds);
+		} else {
+			// If no obstructions, make sure ghosted nodes are cleared
+			console.log('✨ No obstructions found, clearing any ghosted nodes');
+			// Trigger reactivity even when clearing
+			ghostedBoxIds = new Set(ghostedBoxIds);
+		}
+	},
+
+	// Refresh ghosting for the currently selected box (call this when view changes)
+	refreshGhosting(viewportWidth: number, viewportHeight: number) {
+		if (selectedBoxId !== null) {
+			this.checkAndGhostObstructors(selectedBoxId, viewportWidth, viewportHeight);
 		}
 	},
 
@@ -919,6 +950,11 @@ export const canvasStore = {
 		zoom = clampedZoom;
 		targetZoom = clampedZoom;
 		console.log(`🔍 Zoom set to ${clampedZoom.toFixed(2)}x via slider`);
+	},
+
+	// Called when view changes to refresh ghosting if needed
+	onViewChange(viewportWidth: number, viewportHeight: number) {
+		this.refreshGhosting(viewportWidth, viewportHeight);
 	},
 
 	// Trigger boundary hit effect when node hits screen surface (Z=0)

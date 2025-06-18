@@ -144,8 +144,13 @@
 
 	.dragging-layer {
 		/* Dragging layer gets highest z-index and direct 1:1 movement */
-		pointer-events: auto;
+		pointer-events: none; /* Let clicks pass through the layer itself */
 		/* Subtle visual feedback that parallax is suspended */
 		filter: drop-shadow(0 0 8px rgba(74, 144, 226, 0.3));
+	}
+
+	.dragging-layer :global(.box) {
+		/* Re-enable pointer events for the actual box being dragged */
+		pointer-events: auto;
 	}
 </style>

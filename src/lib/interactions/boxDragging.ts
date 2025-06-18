@@ -39,6 +39,12 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 		node.setPointerCapture(event.pointerId);
 		node.addEventListener('pointermove', handlePointerMove);
 		node.addEventListener('pointerup', handlePointerUp);
+		node.addEventListener('pointercancel', handlePointerUp); // Handle pointer cancel
+
+		// Also listen for these events on window to catch edge cases
+		window.addEventListener('pointerup', handlePointerUp);
+		window.addEventListener('pointercancel', handlePointerUp);
+		window.addEventListener('blur', handlePointerUp); // Clear on window blur
 
 		event.stopPropagation();
 		event.preventDefault();
@@ -54,14 +60,27 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 	}
 
 	function handlePointerUp(event: PointerEvent) {
+		if (!isDragging) return; // Guard against multiple calls
+
 		isDragging = false;
 
 		// Clear dragging state to restore parallax
 		canvasStore.setDragging(null);
 
+		// Refresh ghosting after dragging ends, since box position changed
+		if (viewportWidth > 0 && viewportHeight > 0) {
+			canvasStore.onViewChange(viewportWidth, viewportHeight);
+		}
+
 		node.releasePointerCapture(event.pointerId);
 		node.removeEventListener('pointermove', handlePointerMove);
 		node.removeEventListener('pointerup', handlePointerUp);
+		node.removeEventListener('pointercancel', handlePointerUp);
+
+		// Remove window listeners
+		window.removeEventListener('pointerup', handlePointerUp);
+		window.removeEventListener('pointercancel', handlePointerUp);
+		window.removeEventListener('blur', handlePointerUp);
 	}
 
 	node.addEventListener('pointerdown', handlePointerDown);
@@ -69,6 +88,11 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 	return {
 		destroy() {
 			node.removeEventListener('pointerdown', handlePointerDown);
+
+			// Safety cleanup: clear dragging state if this box was being dragged
+			if (isDragging && canvasStore.draggingBoxId === boxId) {
+				canvasStore.setDragging(null);
+			}
 		}
 	};
 };
