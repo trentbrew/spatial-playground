@@ -6,6 +6,7 @@ export interface BoxState {
 	height: number;
 	content: string;
 	color: string;
+	z: number; // Z-axis position for parallax depth
 }
 
 // Define the extended type here
@@ -50,10 +51,11 @@ export function prepareStateForLoad(state: GraphState): {
 	// Use deep copy if the incoming state object might be reused/mutated elsewhere
 	const loadedBoxes = JSON.parse(JSON.stringify(state.boxes));
 
-	// Ensure loaded boxes have a type (add default if missing)
+	// Ensure loaded boxes have a type and z value (add defaults if missing)
 	const newBoxes: AppBoxState[] = loadedBoxes.map((box: any) => ({
 		...box,
-		type: box.type || 'sticky' // Default to sticky if type is missing
+		type: box.type || 'sticky', // Default to sticky if type is missing
+		z: box.z !== undefined ? box.z : 0 // Default to z=0 if z is missing
 	}));
 
 	return {

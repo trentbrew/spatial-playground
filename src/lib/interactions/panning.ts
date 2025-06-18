@@ -1,6 +1,5 @@
 import type { Action } from 'svelte/action';
-import { canvasStore } from '$lib/stores/canvasStore';
-import { get } from 'svelte/store';
+import { canvasStore } from '$lib/stores/canvasStore.svelte';
 
 export const panning: Action<HTMLElement> = (node) => {
 	let isPanning = false;
@@ -14,7 +13,7 @@ export const panning: Action<HTMLElement> = (node) => {
 
 	function handleMouseDown(event: MouseEvent) {
 		// Disable panning if a box is fullscreen
-		const currentFullscreenId = get(canvasStore).fullscreenBoxId;
+		const currentFullscreenId = canvasStore.fullscreenBoxId;
 		if (currentFullscreenId !== null) {
 			return;
 		}
@@ -100,7 +99,7 @@ export const panning: Action<HTMLElement> = (node) => {
 		// Only handle single touch for panning for now
 		if (event.touches.length !== 1) return;
 		// Disable panning if a box is fullscreen
-		const currentFullscreenIdTouch = get(canvasStore).fullscreenBoxId;
+		const currentFullscreenIdTouch = canvasStore.fullscreenBoxId;
 		if (currentFullscreenIdTouch !== null) {
 			return;
 		}

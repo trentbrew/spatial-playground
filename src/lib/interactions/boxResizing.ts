@@ -1,5 +1,5 @@
 import type { Action } from 'svelte/action';
-import { canvasStore } from '$lib/stores/canvasStore';
+import { canvasStore } from '$lib/stores/canvasStore.svelte';
 
 // Minimum dimensions for a box
 const MIN_WIDTH = 100;
@@ -13,14 +13,8 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 	let initialY = 0;
 	let initialWidth = 0;
 	let initialHeight = 0;
-	let currentZoom = 1;
 
 	let handleType = ''; // Store handle type being dragged
-
-	// Subscribe to get zoom level
-	const unsubZoom = canvasStore.subscribe((state) => {
-		currentZoom = state.zoom;
-	});
 
 	function handleMouseDown(event: MouseEvent) {
 		if (event.button !== 0) return;
@@ -32,16 +26,13 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 		startY = event.clientY;
 
 		// Get initial box dimensions
-		const unsubPos = canvasStore.subscribe((state) => {
-			const box = state.boxes.find((b) => b.id === boxId);
-			if (box) {
-				initialX = box.x;
-				initialY = box.y;
-				initialWidth = box.width;
-				initialHeight = box.height;
-			}
-		});
-		unsubPos();
+		const box = canvasStore.boxes.find((b) => b.id === boxId);
+		if (box) {
+			initialX = box.x;
+			initialY = box.y;
+			initialWidth = box.width;
+			initialHeight = box.height;
+		}
 
 		window.addEventListener('mousemove', handleMouseMove);
 		window.addEventListener('touchmove', handleTouchMove, { passive: false });
@@ -61,16 +52,13 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 		startY = event.touches[0].clientY;
 
 		// Get initial box dimensions
-		const unsubPos = canvasStore.subscribe((state) => {
-			const box = state.boxes.find((b) => b.id === boxId);
-			if (box) {
-				initialX = box.x;
-				initialY = box.y;
-				initialWidth = box.width;
-				initialHeight = box.height;
-			}
-		});
-		unsubPos();
+		const box = canvasStore.boxes.find((b) => b.id === boxId);
+		if (box) {
+			initialX = box.x;
+			initialY = box.y;
+			initialWidth = box.width;
+			initialHeight = box.height;
+		}
 
 		window.addEventListener('touchmove', handleTouchMove, { passive: false });
 		window.addEventListener('touchend', handleTouchEnd, { passive: false });
@@ -94,8 +82,8 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 	}
 
 	function updateDimensions(dx: number, dy: number) {
-		const worldDX = dx / currentZoom;
-		const worldDY = dy / currentZoom;
+		const worldDX = dx / canvasStore.zoom;
+		const worldDY = dy / canvasStore.zoom;
 
 		let newX = initialX;
 		let newY = initialY;
@@ -168,7 +156,6 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 			window.removeEventListener('touchmove', handleTouchMove);
 			window.removeEventListener('mouseup', handleMouseUp);
 			window.removeEventListener('touchend', handleTouchEnd);
-			unsubZoom();
 		}
 	};
 };

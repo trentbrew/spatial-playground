@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
-	import { get } from 'svelte/store';
-	import { canvasStore } from '$lib/stores/canvasStore';
+	import { onMount } from 'svelte';
+	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import { boxDragging } from '$lib/interactions/boxDragging';
 	import { boxResizing } from '$lib/interactions/boxResizing';
 	import type { AppBoxState } from '$lib/canvasState';
 	import { nodeComponentMap } from '$lib/components/nodeComponentMap';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 
-	export let box: AppBoxState;
+	// Use $props() rune for component props
+	let { box }: { box: AppBoxState } = $props();
 
 	// Get viewport context
 	let viewportWidth = 0;
@@ -26,28 +26,47 @@
 		};
 	});
 
-	let selectedBoxId: number | null;
-	let fullscreenBoxId: number | null;
-	let zoomedBoxId: number | null; // Track zoomed state
-	let isAnimatingFullscreen: boolean;
-	let lastSelectedBoxId: number | null;
-	let currentZoom: number; // Need current zoom level
-	// Subscribe only in browser/onMount if needed, but safe here
-	const unsubscribe = canvasStore.subscribe((state) => {
-		selectedBoxId = state.selectedBoxId;
-		fullscreenBoxId = state.fullscreenBoxId;
-		zoomedBoxId = state.zoomedBoxId;
-		currentZoom = state.zoom; // Get zoom level
-		isAnimatingFullscreen = state.isAnimatingFullscreen;
-		lastSelectedBoxId = state.lastSelectedBoxId;
-	});
-	onDestroy(unsubscribe);
+	// Direct access to store properties (reactive)
+	const selectedBoxId = $derived(canvasStore.selectedBoxId);
+	const fullscreenBoxId = $derived(canvasStore.fullscreenBoxId);
+	const zoomedBoxId = $derived(canvasStore.zoomedBoxId); // Track zoomed state
+	const isAnimatingFullscreen = $derived(canvasStore.isAnimatingFullscreen);
+	const lastSelectedBoxId = $derived(canvasStore.lastSelectedBoxId);
+	const currentZoom = $derived(canvasStore.zoom); // Need current zoom level
 
 	const Component = nodeComponentMap[box.type] || nodeComponentMap['sticky'];
 
+	// Derived state for styling and positioning
+	const isSelected = $derived(selectedBoxId === box.id);
+	const isFullscreen = $derived(fullscreenBoxId === box.id);
+	const zIndex = $derived(lastSelectedBoxId === box.id ? 1000 : 100);
+	const worldTransform = $derived(`translate(${box.x}px, ${box.y}px)`);
+
+	// Toolbar positioning - calculate screen position to avoid scaling issues
+	const toolbarPosition = $derived(() => {
+		const zoom = currentZoom;
+		const offsetX = canvasStore.offsetX;
+		const offsetY = canvasStore.offsetY;
+
+		// Calculate screen position of the box center
+		const boxCenterScreenX = (box.x + box.width / 2) * zoom + offsetX;
+		const boxTopScreenY = box.y * zoom + offsetY;
+
+		return {
+			// Position in screen coordinates
+			left: boxCenterScreenX,
+			top: boxTopScreenY - 50, // 50px above the box in screen space
+			scale: 1 // No scaling needed since we're using screen coordinates
+		};
+	});
+
+	// Component references for actions
+	let containerElement: HTMLDivElement;
+	let dragHandleElement: HTMLDivElement;
+
 	function handleClick(event: MouseEvent) {
-		// Always select the clicked box first
-		canvasStore.selectBox(box.id);
+		// Always select the clicked box first, providing viewport dimensions
+		canvasStore.selectBox(box.id, viewportWidth, viewportHeight);
 
 		// If already zoomed in (via double-click) on a DIFFERENT box,
 		// treat this single click as a request to zoom to the new box.
@@ -61,7 +80,7 @@
 			// Do nothing if already fullscreen - exit is handled by the button
 			return;
 		} else if (zoomedBoxId === box.id) {
-			canvasStore.restorePreviousView();
+			canvasStore.restorePreviousZoom();
 		} else {
 			// Exit fullscreen if another box is fullscreen first
 			if (fullscreenBoxId !== null) {
@@ -94,6 +113,25 @@
 			canvasStore.enterFullscreen(box.id, viewportWidth, viewportHeight);
 		}
 	}
+
+	// Toolbar button handlers
+	function handleDuplicate(event: MouseEvent) {
+		event.stopPropagation();
+		// TODO: Implement duplicate functionality
+		console.log('Duplicate box:', box.id);
+	}
+
+	function handleDelete(event: MouseEvent) {
+		event.stopPropagation();
+		// TODO: Implement delete functionality
+		console.log('Delete box:', box.id);
+	}
+
+	function handleSettings(event: MouseEvent) {
+		event.stopPropagation();
+		// TODO: Implement settings functionality
+		console.log('Settings for box:', box.id);
+	}
 </script>
 
 <div
@@ -108,6 +146,7 @@
 	style:top="{box.y}px"
 	style:width="{box.width}px"
 	style:height="{box.height}px"
+	style:--z-brightness={box.z * 0.05}
 	style:z-index={fullscreenBoxId === box.id
 		? 10
 		: selectedBoxId === box.id
@@ -124,6 +163,16 @@
 		use:boxDragging={box.id}
 		on:dblclick={handleDragHandleDoubleClick}
 	>
+		<!-- Z-index indicator -->
+		<div class="z-indicator" class:background={box.z < 0} class:foreground={box.z > 0}>
+			Z: {box.z}
+			{#if box.z < 0}
+				<span class="depth-effects">
+					({(1 + box.z * 0.15).toFixed(2)}x, {(Math.abs(box.z) * 1.5).toFixed(1)}px blur)
+				</span>
+			{/if}
+		</div>
+
 		<button
 			class="fullscreen-toggle-button"
 			on:click={toggleFullscreen}
@@ -156,6 +205,62 @@
 	{/if}
 </div>
 
+<!-- Floating Toolbar -->
+{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
+	<div
+		class="floating-toolbar"
+		style:left="{toolbarPosition().left}px"
+		style:top="{toolbarPosition().top}px"
+		style:transform="translate(-50%, 0) scale({toolbarPosition().scale})"
+		style:z-index={zIndex + 1}
+	>
+		<button class="toolbar-btn" title="Duplicate" on:click={handleDuplicate}>
+			<svg
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+			>
+				<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+			</svg>
+		</button>
+		<button class="toolbar-btn" title="Delete" on:click={handleDelete}>
+			<svg
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+			>
+				<polyline points="3,6 5,6 21,6"></polyline>
+				<path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2V6"
+				></path>
+				<line x1="10" y1="11" x2="10" y2="17"></line>
+				<line x1="14" y1="11" x2="14" y2="17"></line>
+			</svg>
+		</button>
+		<button class="toolbar-btn" title="Settings" on:click={handleSettings}>
+			<svg
+				width="16"
+				height="16"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+			>
+				<circle cx="12" cy="12" r="3"></circle>
+				<path
+					d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+				></path>
+			</svg>
+		</button>
+	</div>
+{/if}
+
 <style>
 	.box {
 		position: absolute;
@@ -174,6 +279,8 @@
 		transition:
 			border-color 0.2s ease-out,
 			box-shadow 0.2s ease-out;
+		/* Add subtle box-shadow based on Z-index for depth perception */
+		filter: brightness(calc(1 + var(--z-brightness, 0)));
 	}
 	.drag-handle {
 		width: 100%;
@@ -278,5 +385,99 @@
 			height 400ms ease-in-out,
 			left 400ms ease-in-out,
 			top 400ms ease-in-out;
+	}
+
+	/* Floating Toolbar Styles */
+	.floating-toolbar {
+		position: fixed; /* Using fixed positioning for screen-space coordinates */
+		display: flex;
+		gap: 4px;
+		background: rgba(0, 0, 0, 0.8);
+		backdrop-filter: blur(8px);
+		border-radius: 8px;
+		padding: 6px;
+		pointer-events: auto;
+		transform-origin: center top;
+		z-index: 1001;
+		opacity: 0;
+		animation: fadeInToolbar 0.2s ease-out forwards;
+	}
+
+	@keyframes fadeInToolbar {
+		from {
+			opacity: 0;
+			transform: translateY(10px) scale(0.9);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
+	}
+
+	.toolbar-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 6px;
+		color: white;
+		cursor: pointer;
+		transition: all 0.2s ease;
+		padding: 0;
+	}
+
+	.toolbar-btn:hover {
+		background: rgba(255, 255, 255, 0.2);
+		border-color: rgba(255, 255, 255, 0.3);
+		transform: scale(1.05);
+	}
+
+	.toolbar-btn:active {
+		transform: scale(0.95);
+	}
+
+	.toolbar-btn svg {
+		width: 16px;
+		height: 16px;
+		stroke-width: 2;
+	}
+
+	/* Z-Index Indicator Styles */
+	.z-indicator {
+		position: absolute;
+		top: 2px;
+		left: 6px;
+		font-size: 10px;
+		font-weight: 600;
+		color: var(--handle-text-color);
+		background: rgba(0, 0, 0, 0.2);
+		padding: 2px 6px;
+		border-radius: 4px;
+		font-family: monospace;
+		user-select: none;
+		z-index: 2;
+		transition: all 0.2s ease;
+	}
+
+	.z-indicator.background {
+		background: rgba(100, 150, 255, 0.3); /* Blue tint for background layers */
+		color: #ffffff;
+		border: 1px solid rgba(100, 150, 255, 0.5);
+	}
+
+	.z-indicator.foreground {
+		background: rgba(255, 200, 100, 0.3); /* Orange tint for foreground layers */
+		color: #ffffff;
+		border: 1px solid rgba(255, 200, 100, 0.5);
+	}
+
+	.depth-effects {
+		font-size: 8px;
+		opacity: 0.8;
+		font-weight: normal;
+		margin-left: 4px;
 	}
 </style>

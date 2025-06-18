@@ -1,37 +1,26 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
-	import { canvasStore } from '$lib/stores/canvasStore';
+	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import type { AppBoxState } from '$lib/canvasState';
 	import ThemeToggle from './ThemeToggle.svelte'; // Assuming this exists
 
-	let selectedBoxId: number | null = null;
-	let boxes: AppBoxState[] = [];
-
-	let selectedBox: AppBoxState | undefined;
+	// Direct access to store properties (reactive)
+	const selectedBoxId = $derived(canvasStore.selectedBoxId);
+	const boxes = $derived(canvasStore.boxes);
+	const selectedBox = $derived(boxes.find((box) => box.id === selectedBoxId));
 
 	// Viewport state for display
-	let currentZoom: number = 1;
-	let currentOffsetX: number = 0;
-	let currentOffsetY: number = 0;
+	const currentZoom = $derived(canvasStore.zoom);
+	const currentOffsetX = $derived(canvasStore.offsetX);
+	const currentOffsetY = $derived(canvasStore.offsetY);
 
 	// Input values, synced one-way from selected box
-	let debugXInput: string = '';
-	let debugYInput: string = '';
-	let debugWidthInput: string = '';
-	let debugHeightInput: string = '';
+	let debugXInput = $state('');
+	let debugYInput = $state('');
+	let debugWidthInput = $state('');
+	let debugHeightInput = $state('');
 
-	const unsubscribe = canvasStore.subscribe((state) => {
-		selectedBoxId = state.selectedBoxId;
-		boxes = state.boxes;
-		// Find selected box based on ID
-		selectedBox = boxes.find((box) => box.id === selectedBoxId);
-
-		// Update viewport state
-		currentZoom = state.zoom;
-		currentOffsetX = state.offsetX;
-		currentOffsetY = state.offsetY;
-
-		// Update input fields only if a box is selected
+	// Update input fields when selected box changes
+	$effect(() => {
 		if (selectedBox) {
 			debugXInput = selectedBox.x.toFixed(1);
 			debugYInput = selectedBox.y.toFixed(1);
@@ -45,8 +34,6 @@
 			debugHeightInput = '';
 		}
 	});
-
-	onDestroy(unsubscribe);
 
 	// Function to handle input changes and update the store
 	// Debounce this in a real app to prevent excessive updates
@@ -114,6 +101,15 @@
 	<div class="viewport-info">
 		Zoom: {currentZoom.toFixed(2)} | X: {currentOffsetX.toFixed(1)} | Y: {currentOffsetY.toFixed(1)}
 	</div>
+
+	<!-- Keyboard Shortcuts Hint -->
+	{#if selectedBoxId !== null}
+		<div class="shortcuts-hint">
+			<div class="shortcuts-title">Depth Controls:</div>
+			<div class="shortcut">⌘ + ] : Move Forward</div>
+			<div class="shortcut">⌘ + [ : Move Backward</div>
+		</div>
+	{/if}
 </div>
 
 <style>
@@ -184,5 +180,29 @@
 		font-family: monospace;
 		z-index: 100;
 		pointer-events: none; /* Allow clicks to pass through */
+	}
+
+	.shortcuts-hint {
+		position: fixed;
+		bottom: 20px;
+		left: 20px;
+		z-index: 100;
+		background-color: rgba(0, 0, 0, 0.5);
+		color: white;
+		padding: 5px 10px;
+		border-radius: 4px;
+		font-size: 11px;
+		font-family: monospace;
+		pointer-events: none;
+	}
+
+	.shortcuts-title {
+		font-weight: bold;
+		margin-bottom: 2px;
+	}
+
+	.shortcut {
+		font-size: 10px;
+		opacity: 0.8;
 	}
 </style>

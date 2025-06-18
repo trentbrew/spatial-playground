@@ -1,130 +1,67 @@
+import { canvasStore } from '$lib/stores/canvasStore.svelte';
 import type { Action } from 'svelte/action';
-import { canvasStore } from '$lib/stores/canvasStore';
-import { get } from 'svelte/store';
 
 export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
-	let isDown = false;
 	let startX = 0;
 	let startY = 0;
-	let initialX = 0;
-	let initialY = 0;
-	let currentZoom = 1;
+	let initialBoxX = 0;
+	let initialBoxY = 0;
+	let isDragging = false;
 
-	// Subscribe to zoom level only
-	const unsubZoom = canvasStore.subscribe((state) => {
-		currentZoom = state.zoom;
-	});
+	// We need the viewport dimensions to pass to selectBox
+	let viewportWidth = 0;
+	let viewportHeight = 0;
 
-	function handleMouseDown(event: MouseEvent) {
-		if (event.button !== 0) return;
-		// Disable dragging if this box is fullscreen
-		const currentFullscreenId = get(canvasStore).fullscreenBoxId;
-		if (get(canvasStore).fullscreenBoxId === boxId) {
-			return;
+	function handlePointerDown(event: PointerEvent) {
+		if (event.button !== 0 && event.pointerType === 'mouse') return;
+		if (canvasStore.fullscreenBoxId !== null) return;
+
+		const viewportEl = node.closest('.viewport');
+		if (viewportEl) {
+			viewportWidth = viewportEl.clientWidth;
+			viewportHeight = viewportEl.clientHeight;
 		}
 
-		// Select the box immediately on mousedown
-		canvasStore.selectBox(boxId);
+		canvasStore.selectBox(boxId, viewportWidth, viewportHeight);
 
-		isDown = true;
+		const box = canvasStore.boxes.find((b) => b.id === boxId);
+		if (!box) return;
+
+		initialBoxX = box.x;
+		initialBoxY = box.y;
 		startX = event.clientX;
 		startY = event.clientY;
+		isDragging = true;
 
-		// Capture initial box position
-		const unsubPos = canvasStore.subscribe((state) => {
-			const box = state.boxes.find((b) => b.id === boxId);
-			if (box) {
-				initialX = box.x;
-				initialY = box.y;
-			}
-		});
-		unsubPos();
+		node.setPointerCapture(event.pointerId);
+		node.addEventListener('pointermove', handlePointerMove);
+		node.addEventListener('pointerup', handlePointerUp);
 
-		// Listen for move/up on the whole document
-		document.addEventListener('mousemove', handleMouseMove);
-		document.addEventListener('mouseup', handleMouseUp);
-
-		event.preventDefault();
 		event.stopPropagation();
-	}
-
-	function handleTouchStart(event: TouchEvent) {
-		if (event.touches.length !== 1) return;
-		// Disable dragging if this box is fullscreen
-		const currentFullscreenIdTouch = get(canvasStore).fullscreenBoxId;
-		if (get(canvasStore).fullscreenBoxId === boxId) {
-			return;
-		}
-
-		// Select the box immediately on touchstart
-		canvasStore.selectBox(boxId);
-
-		isDown = true;
-		startX = event.touches[0].clientX;
-		startY = event.touches[0].clientY;
-
-		// Capture initial box position
-		const unsubPos = canvasStore.subscribe((state) => {
-			const box = state.boxes.find((b) => b.id === boxId);
-			if (box) {
-				initialX = box.x;
-				initialY = box.y;
-			}
-		});
-		unsubPos();
-
-		// Listen for move/up on the whole document
-		document.addEventListener('touchmove', handleTouchMove, { passive: false });
-		document.addEventListener('touchend', handleTouchEnd, { passive: false });
-
 		event.preventDefault();
-		event.stopPropagation();
 	}
 
-	function handleMouseMove(event: MouseEvent) {
-		if (!isDown) return;
-		const dx = event.clientX - startX;
-		const dy = event.clientY - startY;
-		const worldDX = dx / currentZoom;
-		const worldDY = dy / currentZoom;
-		canvasStore.updateBox(boxId, { x: initialX + worldDX, y: initialY + worldDY });
+	function handlePointerMove(event: PointerEvent) {
+		if (!isDragging) return;
+
+		const dx = (event.clientX - startX) / canvasStore.zoom;
+		const dy = (event.clientY - startY) / canvasStore.zoom;
+
+		canvasStore.updateBox(boxId, { x: initialBoxX + dx, y: initialBoxY + dy });
 	}
 
-	function handleMouseUp() {
-		if (!isDown) return;
-		isDown = false;
-		document.removeEventListener('mousemove', handleMouseMove);
-		document.removeEventListener('mouseup', handleMouseUp);
+	function handlePointerUp(event: PointerEvent) {
+		isDragging = false;
+		node.releasePointerCapture(event.pointerId);
+		node.removeEventListener('pointermove', handlePointerMove);
+		node.removeEventListener('pointerup', handlePointerUp);
 	}
 
-	function handleTouchMove(event: TouchEvent) {
-		if (!isDown) return;
-		const dx = event.touches[0].clientX - startX;
-		const dy = event.touches[0].clientY - startY;
-		const worldDX = dx / currentZoom;
-		const worldDY = dy / currentZoom;
-		canvasStore.updateBox(boxId, { x: initialX + worldDX, y: initialY + worldDY });
-	}
-
-	function handleTouchEnd() {
-		if (!isDown) return;
-		isDown = false;
-		document.removeEventListener('touchmove', handleTouchMove);
-		document.removeEventListener('touchend', handleTouchEnd);
-	}
-
-	node.addEventListener('mousedown', handleMouseDown);
-	node.addEventListener('touchstart', handleTouchStart, { passive: false });
+	node.addEventListener('pointerdown', handlePointerDown);
 
 	return {
 		destroy() {
-			node.removeEventListener('mousedown', handleMouseDown);
-			node.removeEventListener('touchstart', handleTouchStart);
-			document.removeEventListener('mousemove', handleMouseMove);
-			document.removeEventListener('mouseup', handleMouseUp);
-			document.removeEventListener('touchmove', handleTouchMove);
-			document.removeEventListener('touchend', handleTouchEnd);
-			unsubZoom();
+			node.removeEventListener('pointerdown', handlePointerDown);
 		}
 	};
 };

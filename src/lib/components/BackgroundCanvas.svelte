@@ -1,21 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
-	import { canvasStore } from '$lib/stores/canvasStore';
+	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 
 	let canvasElement: HTMLCanvasElement;
 	let ctx: CanvasRenderingContext2D | null = null;
 
-	// Current zoom & pan values
-	let zoom: number;
-	let offsetX: number;
-	let offsetY: number;
+	// Direct access to store properties (reactive)
+	const zoom = $derived(canvasStore.zoom);
+	const offsetX = $derived(canvasStore.offsetX);
+	const offsetY = $derived(canvasStore.offsetY);
 
 	// Flag to schedule a draw on the next animation frame
 	let needsDraw = false;
-
-	// Handle unsubscribing the store
-	let unsubscribe: () => void;
 
 	// Coordinate Conversion (Local to this component)
 	function screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
@@ -32,6 +29,18 @@
 		needsDraw = true;
 		requestAnimationFrame(draw);
 	}
+
+	// Reactive draw when store values change
+	$effect(() => {
+		if (browser && ctx && canvasElement) {
+			// Access the reactive values to ensure the effect tracks them
+			const currentZoom = zoom;
+			const currentOffsetX = offsetX;
+			const currentOffsetY = offsetY;
+
+			scheduleDraw();
+		}
+	});
 
 	// Core draw logic
 	function draw() {
@@ -157,13 +166,6 @@
 
 	onMount(() => {
 		if (!browser) return;
-		// Subscribe to store changes only on client
-		unsubscribe = canvasStore.subscribe((state) => {
-			zoom = state.zoom;
-			offsetX = state.offsetX;
-			offsetY = state.offsetY;
-			scheduleDraw();
-		});
 		ctx = canvasElement.getContext('2d');
 		// Observe container size changes
 		const resizeObserver = new ResizeObserver(resizeCanvas);
@@ -175,7 +177,6 @@
 		resizeCanvas();
 
 		return () => {
-			unsubscribe();
 			resizeObserver.disconnect();
 		};
 	});

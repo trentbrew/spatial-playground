@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { writable, get } from 'svelte/store';
+	import { writable } from 'svelte/store';
 	import { browser } from '$app/environment';
-	import { canvasStore } from '$lib/stores/canvasStore';
+	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import type { AppBoxState } from '$lib/canvasState';
 	import BackgroundCanvas from '$lib/components/BackgroundCanvas.svelte';
 	import NodesLayer from '$lib/components/NodesLayer.svelte';
@@ -20,39 +20,26 @@
 	}
 
 	let viewportElement: HTMLDivElement;
-	let zoom: number;
-	let offsetX: number;
-	let offsetY: number;
-	let boxes: AppBoxState[];
-	let selectedBoxId: number | null;
-	let fullscreenBoxId: number | null;
-	let zoomedBoxId: number | null;
-	let isAnimatingDoublezoom: boolean;
+
+	// Direct access to store properties (reactive)
+	const zoom = $derived(canvasStore.zoom);
+	const offsetX = $derived(canvasStore.offsetX);
+	const offsetY = $derived(canvasStore.offsetY);
+	const boxes = $derived(canvasStore.boxes);
+	const selectedBoxId = $derived(canvasStore.selectedBoxId);
+	const fullscreenBoxId = $derived(canvasStore.fullscreenBoxId);
+	const zoomedBoxId = $derived(canvasStore.zoomedBoxId);
+	const isAnimatingDoublezoom = $derived(canvasStore.isAnimatingDoublezoom);
 
 	// Target state from store
-	let targetZoom: number;
-	let targetOffsetX: number;
-	let targetOffsetY: number;
+	const targetZoom = $derived(canvasStore.targetZoom);
+	const targetOffsetX = $derived(canvasStore.targetOffsetX);
+	const targetOffsetY = $derived(canvasStore.targetOffsetY);
 
 	// Create writable stores for viewport element and dimensions
 	const viewportElementStore = writable<HTMLElement | null>(null);
 	const viewportWidthStore = writable<number>(0);
 	const viewportHeightStore = writable<number>(0);
-
-	// Subscribe to store and extract state
-	const unsubscribe = canvasStore.subscribe((state) => {
-		zoom = state.zoom;
-		offsetX = state.offsetX;
-		offsetY = state.offsetY;
-		targetZoom = state.targetZoom;
-		targetOffsetX = state.targetOffsetX;
-		targetOffsetY = state.targetOffsetY;
-		isAnimatingDoublezoom = state.isAnimatingDoublezoom;
-		zoomedBoxId = state.zoomedBoxId;
-		boxes = state.boxes;
-		selectedBoxId = state.selectedBoxId;
-		fullscreenBoxId = state.fullscreenBoxId;
-	});
 
 	let animationFrameId: number | null = null;
 
@@ -86,12 +73,11 @@
 
 			// If exiting fullscreen, finalize the state *after* animation completes
 			// Check if we *were* fullscreen and the target matches the original view state
-			const storeState = get(canvasStore); // Get current store state for original values
 			if (
-				storeState.fullscreenBoxId !== null && // Check if we are technically still in fullscreen state
-				targetZoom === storeState.originalViewZoom &&
-				targetOffsetX === storeState.originalViewOffsetX &&
-				targetOffsetY === storeState.originalViewOffsetY
+				canvasStore.fullscreenBoxId !== null && // Check if we are technically still in fullscreen state
+				targetZoom === canvasStore.originalViewZoom &&
+				targetOffsetX === canvasStore.originalViewOffsetX &&
+				targetOffsetY === canvasStore.originalViewOffsetY
 			) {
 				canvasStore._finalizeExitFullscreen(); // Clear flags
 			}
@@ -124,12 +110,14 @@
 	}
 
 	// Reactively start animation when target differs from current
-	$: if (
-		browser &&
-		(zoom !== targetZoom || offsetX !== targetOffsetX || offsetY !== targetOffsetY)
-	) {
-		startAnimation();
-	}
+	$effect(() => {
+		if (
+			browser &&
+			(zoom !== targetZoom || offsetX !== targetOffsetX || offsetY !== targetOffsetY)
+		) {
+			startAnimation();
+		}
+	});
 
 	// Provide context
 	setViewportContext({
@@ -162,7 +150,7 @@
 
 		// Run this only once on initial mount
 		requestAnimationFrame(() => {
-			const initialBoxes = get(canvasStore).boxes;
+			const initialBoxes = canvasStore.boxes;
 			if (initialBoxes.length === 0) return; // No boxes, nothing to center
 
 			const viewportWidth = viewportElement.clientWidth;
@@ -189,19 +177,28 @@
 		};
 	});
 
-	onDestroy(unsubscribe);
-
 	// --- Event Handlers ---
 	function handleViewportClick(event: MouseEvent) {
 		// Deselect box if the click didn't originate from a node box or the controls overlay
 		const targetElement = event.target as Element;
 		if (!targetElement.closest('.box') && !targetElement.closest('.controls-overlay')) {
-			// Deselect the current box
+			// Deselect the current box, no dimensions needed for deselect
 			canvasStore.selectBox(null);
+		}
+	}
 
-			// If we were zoomed in on a box (QuickFocus active), restore the previous view
-			if (get(canvasStore).zoomedBoxId !== null) {
-				canvasStore.restorePreviousView();
+	// Keyboard event handler for Z-axis management
+	function handleKeyDown(event: KeyboardEvent) {
+		// Check for Cmd+] (move forward in Z) or Cmd+[ (move backward in Z)
+		if ((event.metaKey || event.ctrlKey) && selectedBoxId !== null) {
+			if (event.key === ']') {
+				event.preventDefault();
+				canvasStore.moveSelectedForward();
+				console.log(`Moved box ${selectedBoxId} forward in Z-axis`);
+			} else if (event.key === '[') {
+				event.preventDefault();
+				canvasStore.moveSelectedBackward();
+				console.log(`Moved box ${selectedBoxId} backward in Z-axis`);
 			}
 		}
 	}
@@ -237,27 +234,28 @@
 		return { minX, minY, maxX, maxY, width, height };
 	}
 
-	const ZOOM_PADDING_FACTOR = 0.8; // Use 80% of viewport
-
 	function calculateOptimalViewport(
 		bbox: BoundingBox,
 		viewportWidth: number,
 		viewportHeight: number
 	): { zoom: number; x: number; y: number } {
-		// Calculate zoom level to fit the bounding box
-		const zoomX = (viewportWidth / bbox.width) * ZOOM_PADDING_FACTOR;
-		const zoomY = (viewportHeight / bbox.height) * ZOOM_PADDING_FACTOR;
-		const newZoom = Math.min(zoomX, zoomY, 1); // Don't zoom in more than 1 initially
+		const padding = 50; // Add some padding around all boxes
+		const availableWidth = viewportWidth - padding * 2;
+		const availableHeight = viewportHeight - padding * 2;
 
-		// Calculate center of the bounding box in world coordinates
-		const boxCenterX = bbox.minX + bbox.width / 2;
-		const boxCenterY = bbox.minY + bbox.height / 2;
+		// Calculate zoom to fit all boxes
+		const zoomX = availableWidth / bbox.width;
+		const zoomY = availableHeight / bbox.height;
+		const zoom = Math.min(zoomX, zoomY, 1); // Don't zoom in beyond 1x initially
 
-		// Calculate the offset needed to center the box center in the viewport
-		const newOffsetX = viewportWidth / 2 - boxCenterX * newZoom;
-		const newOffsetY = viewportHeight / 2 - boxCenterY * newZoom;
+		// Calculate offset to center the boxes
+		const centerX = bbox.minX + bbox.width / 2;
+		const centerY = bbox.minY + bbox.height / 2;
 
-		return { zoom: newZoom, x: newOffsetX, y: newOffsetY };
+		const x = viewportWidth / 2 - centerX * zoom;
+		const y = viewportHeight / 2 - centerY * zoom;
+
+		return { zoom, x, y };
 	}
 </script>
 
@@ -267,6 +265,8 @@
 	use:panning
 	use:zooming
 	on:click={handleViewportClick}
+	on:keydown={handleKeyDown}
+	tabindex="0"
 >
 	<BackgroundCanvas />
 	<NodesLayer />

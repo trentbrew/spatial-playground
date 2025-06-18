@@ -1,16 +1,13 @@
 <script lang="ts">
 	import { getTextColorForBackground } from '$lib/utils/colorUtils'; // Import the utility
 
-	export let id: number;
-	export let content: string;
-	export let color: string;
-	// Add other common props like width, height, x, y if needed for internal logic
-	// Or rely on the parent component (+page.svelte) to handle positioning/sizing
+	// Use $props() rune for component props
+	let { id, content, color }: { id: number; content: string; color: string } = $props();
 
 	// Node-specific logic would go here
 
-	// Reactive declaration to calculate text color based on background
-	$: contrastingTextColor = getTextColorForBackground(color);
+	// Use $derived rune to calculate text color based on background
+	const contrastingTextColor = $derived(getTextColorForBackground(color));
 </script>
 
 <div id={String(id)} class="sticky-note-content outline-none" style="background-color: {color};">
