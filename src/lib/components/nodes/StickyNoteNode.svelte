@@ -23,7 +23,7 @@
 	.sticky-note-content {
 		width: 100%;
 		height: 100%;
-		padding: 24px 36px; /* Only top padding for handle */
+		padding: 8px 12px; /* Only top padding for handle */
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;

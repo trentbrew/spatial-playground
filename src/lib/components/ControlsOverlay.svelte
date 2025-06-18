@@ -57,7 +57,7 @@
 </script>
 
 <div class="controls-container">
-	<button class="control-button" on:click={handleAddBox}> + Add Box </button>
+	<button class="control-button" onclick={handleAddBox}> + Add Box </button>
 	<ThemeToggle />
 
 	<!-- Debug Controls -->
@@ -67,7 +67,7 @@
 			X: <input
 				type="number"
 				bind:value={debugXInput}
-				on:input={(e) => handleDebugInput('x', e.currentTarget.value)}
+				oninput={(e) => handleDebugInput('x', e.currentTarget.value)}
 				class="debug-input"
 			/></label
 		>
@@ -75,7 +75,7 @@
 			Y: <input
 				type="number"
 				bind:value={debugYInput}
-				on:input={(e) => handleDebugInput('y', e.currentTarget.value)}
+				oninput={(e) => handleDebugInput('y', e.currentTarget.value)}
 				class="debug-input"
 			/></label
 		>
@@ -83,7 +83,7 @@
 			W: <input
 				type="number"
 				bind:value={debugWidthInput}
-				on:input={(e) => handleDebugInput('width', e.currentTarget.value)}
+				oninput={(e) => handleDebugInput('width', e.currentTarget.value)}
 				class="debug-input"
 			/></label
 		>
@@ -91,7 +91,7 @@
 			H: <input
 				type="number"
 				bind:value={debugHeightInput}
-				on:input={(e) => handleDebugInput('height', e.currentTarget.value)}
+				oninput={(e) => handleDebugInput('height', e.currentTarget.value)}
 				class="debug-input"
 			/></label
 		>

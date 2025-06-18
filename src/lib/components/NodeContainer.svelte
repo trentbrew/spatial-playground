@@ -6,6 +6,7 @@
 	import type { AppBoxState } from '$lib/canvasState';
 	import { nodeComponentMap } from '$lib/components/nodeComponentMap';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
+	import { FOCUS_TRANSITION_DURATION } from '$lib/constants';
 
 	// Use $props() rune for component props
 	let { box }: { box: AppBoxState } = $props();
@@ -36,73 +37,54 @@
 
 	const Component = nodeComponentMap[box.type] || nodeComponentMap['sticky'];
 
-	// Derived state for styling and positioning
-	const isSelected = $derived(selectedBoxId === box.id);
-	const isFullscreen = $derived(fullscreenBoxId === box.id);
-	const zIndex = $derived(lastSelectedBoxId === box.id ? 1000 : 100);
-	const worldTransform = $derived(`translate(${box.x}px, ${box.y}px)`);
-
-	// Toolbar positioning - calculate screen position to avoid scaling issues
-	const toolbarPosition = $derived(() => {
-		const zoom = currentZoom;
-		const offsetX = canvasStore.offsetX;
-		const offsetY = canvasStore.offsetY;
-
-		// Calculate screen position of the box center
-		const boxCenterScreenX = (box.x + box.width / 2) * zoom + offsetX;
-		const boxTopScreenY = box.y * zoom + offsetY;
-
-		return {
-			// Position in screen coordinates
-			left: boxCenterScreenX,
-			top: boxTopScreenY - 50, // 50px above the box in screen space
-			scale: 1 // No scaling needed since we're using screen coordinates
-		};
-	});
-
 	// Component references for actions
 	let containerElement: HTMLDivElement;
 	let dragHandleElement: HTMLDivElement;
 
 	function handleClick(event: MouseEvent) {
-		// Always select the clicked box first, providing viewport dimensions
-		canvasStore.selectBox(box.id, viewportWidth, viewportHeight);
+		console.log(`[NodeContainer] Clicked box id: ${box.id}`, box);
 
-		// If already zoomed in (via double-click) on a DIFFERENT box,
-		// treat this single click as a request to zoom to the new box.
-		if (zoomedBoxId !== null && zoomedBoxId !== box.id && currentZoom > 1.0) {
+		// Start animation tracing automatically
+		if (typeof window !== 'undefined' && window.animationTracer) {
+			console.log('🔍 Auto-starting animation trace for click...');
+			window.animationTracer.traceZoomToBox(box.id, viewportWidth, viewportHeight);
+		} else {
+			// Fallback to manual zoom if tracer not available
+			console.log('⚠️ Animation tracer not available, using manual zoom');
+			// Always select the box first
+			canvasStore.selectBox(box.id);
+			// Then, trigger the zoom-to-focus animation
 			canvasStore.zoomToBox(box.id, viewportWidth, viewportHeight);
 		}
 	}
 
 	function handleDoubleClick(event: MouseEvent) {
-		if (fullscreenBoxId === box.id) {
-			// Do nothing if already fullscreen - exit is handled by the button
-			return;
-		} else if (zoomedBoxId === box.id) {
-			canvasStore.restorePreviousZoom();
-		} else {
-			// Exit fullscreen if another box is fullscreen first
-			if (fullscreenBoxId !== null) {
-				canvasStore.exitFullscreen();
-				// TODO: Potentially wait for exit animation?
-				// For now, zooming immediately after might be slightly jarring
-				setTimeout(() => canvasStore.zoomToBox(box.id, viewportWidth, viewportHeight), 50);
-			} else {
-				canvasStore.zoomToBox(box.id, viewportWidth, viewportHeight);
-			}
+		// A double click will now restore the previous zoom level (zoom out)
+		canvasStore.restorePreviousZoom();
+	}
+
+	function handleKeyDown(event: KeyboardEvent) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			handleClick(new MouseEvent('click'));
+		}
+	}
+
+	function handleDragHandleKeyDown(event: KeyboardEvent) {
+		if (event.key === 'Enter' || event.key === ' ') {
+			handleDragHandleDoubleClick(new MouseEvent('dblclick'));
 		}
 	}
 
 	// New handler for double-clicking the drag handle area
 	function handleDragHandleDoubleClick(event: MouseEvent) {
 		if (fullscreenBoxId === box.id) {
-			// Exit fullscreen if the double-click is on the handle (but not the button itself,
-			// as the button's own dblclick stops propagation)
-			event.stopPropagation(); // Prevent multiClick on parent .box from firing
+			// Exit fullscreen if the double-click is on the handle
+			event.stopPropagation();
 			canvasStore.exitFullscreen();
+		} else {
+			// If not fullscreen, treat it as a regular double-click to zoom out
+			handleDoubleClick(event);
 		}
-		// If not fullscreen, do nothing, let the event bubble if necessary
 	}
 
 	function toggleFullscreen(event: MouseEvent) {
@@ -113,31 +95,15 @@
 			canvasStore.enterFullscreen(box.id, viewportWidth, viewportHeight);
 		}
 	}
-
-	// Toolbar button handlers
-	function handleDuplicate(event: MouseEvent) {
-		event.stopPropagation();
-		// TODO: Implement duplicate functionality
-		console.log('Duplicate box:', box.id);
-	}
-
-	function handleDelete(event: MouseEvent) {
-		event.stopPropagation();
-		// TODO: Implement delete functionality
-		console.log('Delete box:', box.id);
-	}
-
-	function handleSettings(event: MouseEvent) {
-		event.stopPropagation();
-		// TODO: Implement settings functionality
-		console.log('Settings for box:', box.id);
-	}
 </script>
 
 <div
 	class="box"
-	on:click={handleClick}
-	on:dblclick={handleDoubleClick}
+	role="button"
+	tabindex="0"
+	onclick={handleClick}
+	ondblclick={handleDoubleClick}
+	onkeydown={handleKeyDown}
 	class:selected={selectedBoxId === box.id}
 	class:fullscreen={fullscreenBoxId === box.id}
 	class:fullscreen-transition={isAnimatingFullscreen && fullscreenBoxId === box.id}
@@ -147,6 +113,7 @@
 	style:width="{box.width}px"
 	style:height="{box.height}px"
 	style:--z-brightness={box.z * 0.05}
+	style:--focus-transition-duration="{FOCUS_TRANSITION_DURATION}ms"
 	style:z-index={fullscreenBoxId === box.id
 		? 10
 		: selectedBoxId === box.id
@@ -159,9 +126,12 @@
 	<!-- Drag handle placeholder -->
 	<div
 		class="drag-handle"
+		role="button"
+		tabindex="0"
 		title="Drag to move"
 		use:boxDragging={box.id}
-		on:dblclick={handleDragHandleDoubleClick}
+		ondblclick={handleDragHandleDoubleClick}
+		onkeydown={handleDragHandleKeyDown}
 	>
 		<!-- Z-index indicator -->
 		<div class="z-indicator" class:background={box.z < 0} class:foreground={box.z > 0}>
@@ -175,16 +145,15 @@
 
 		<button
 			class="fullscreen-toggle-button"
-			on:click={toggleFullscreen}
-			on:dblclick|stopPropagation
+			onclick={toggleFullscreen}
+			ondblclick={(e) => e.stopPropagation()}
 		>
 			{#if fullscreenBoxId === box.id}Exit{:else}Full{/if}
 		</button>
 	</div>
 
 	<!-- Node-specific content -->
-	<svelte:component
-		this={Component}
+	<Component
 		id={box.id}
 		content={box.content}
 		color={box.color}
@@ -194,72 +163,72 @@
 
 	{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
 		<!-- Resize Handles -->
-		<div class="resize-handle handle-n" data-handle-type="n" use:boxResizing={box.id}></div>
-		<div class="resize-handle handle-ne" data-handle-type="ne" use:boxResizing={box.id}></div>
-		<div class="resize-handle handle-e" data-handle-type="e" use:boxResizing={box.id}></div>
-		<div class="resize-handle handle-se" data-handle-type="se" use:boxResizing={box.id}></div>
-		<div class="resize-handle handle-s" data-handle-type="s" use:boxResizing={box.id}></div>
-		<div class="resize-handle handle-sw" data-handle-type="sw" use:boxResizing={box.id}></div>
-		<div class="resize-handle handle-w" data-handle-type="w" use:boxResizing={box.id}></div>
-		<div class="resize-handle handle-nw" data-handle-type="nw" use:boxResizing={box.id}></div>
+		<div
+			class="resize-handle handle-n"
+			role="button"
+			tabindex="0"
+			data-handle-type="n"
+			use:boxResizing={box.id}
+			onkeydown={(e) => e.stopPropagation()}
+		></div>
+		<div
+			class="resize-handle handle-ne"
+			role="button"
+			tabindex="0"
+			data-handle-type="ne"
+			use:boxResizing={box.id}
+			onkeydown={(e) => e.stopPropagation()}
+		></div>
+		<div
+			class="resize-handle handle-e"
+			role="button"
+			tabindex="0"
+			data-handle-type="e"
+			use:boxResizing={box.id}
+			onkeydown={(e) => e.stopPropagation()}
+		></div>
+		<div
+			class="resize-handle handle-se"
+			role="button"
+			tabindex="0"
+			data-handle-type="se"
+			use:boxResizing={box.id}
+			onkeydown={(e) => e.stopPropagation()}
+		></div>
+		<div
+			class="resize-handle handle-s"
+			role="button"
+			tabindex="0"
+			data-handle-type="s"
+			use:boxResizing={box.id}
+			onkeydown={(e) => e.stopPropagation()}
+		></div>
+		<div
+			class="resize-handle handle-sw"
+			role="button"
+			tabindex="0"
+			data-handle-type="sw"
+			use:boxResizing={box.id}
+			onkeydown={(e) => e.stopPropagation()}
+		></div>
+		<div
+			class="resize-handle handle-w"
+			role="button"
+			tabindex="0"
+			data-handle-type="w"
+			use:boxResizing={box.id}
+			onkeydown={(e) => e.stopPropagation()}
+		></div>
+		<div
+			class="resize-handle handle-nw"
+			role="button"
+			tabindex="0"
+			data-handle-type="nw"
+			use:boxResizing={box.id}
+			onkeydown={(e) => e.stopPropagation()}
+		></div>
 	{/if}
 </div>
-
-<!-- Floating Toolbar -->
-{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
-	<div
-		class="floating-toolbar"
-		style:left="{toolbarPosition().left}px"
-		style:top="{toolbarPosition().top}px"
-		style:transform="translate(-50%, 0) scale({toolbarPosition().scale})"
-		style:z-index={zIndex + 1}
-	>
-		<button class="toolbar-btn" title="Duplicate" on:click={handleDuplicate}>
-			<svg
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-			>
-				<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-				<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-			</svg>
-		</button>
-		<button class="toolbar-btn" title="Delete" on:click={handleDelete}>
-			<svg
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-			>
-				<polyline points="3,6 5,6 21,6"></polyline>
-				<path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2V6"
-				></path>
-				<line x1="10" y1="11" x2="10" y2="17"></line>
-				<line x1="14" y1="11" x2="14" y2="17"></line>
-			</svg>
-		</button>
-		<button class="toolbar-btn" title="Settings" on:click={handleSettings}>
-			<svg
-				width="16"
-				height="16"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-			>
-				<circle cx="12" cy="12" r="3"></circle>
-				<path
-					d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
-				></path>
-			</svg>
-		</button>
-	</div>
-{/if}
 
 <style>
 	.box {
@@ -379,70 +348,12 @@
 	}
 
 	.box.fullscreen-transition {
-		/* Match duration and easing with JS TRIPLEZOOM_DURATION - Assume 400ms for now */
+		/* Match duration and easing with the focus transition */
 		transition:
-			width 400ms ease-in-out,
-			height 400ms ease-in-out,
-			left 400ms ease-in-out,
-			top 400ms ease-in-out;
-	}
-
-	/* Floating Toolbar Styles */
-	.floating-toolbar {
-		position: fixed; /* Using fixed positioning for screen-space coordinates */
-		display: flex;
-		gap: 4px;
-		background: rgba(0, 0, 0, 0.8);
-		backdrop-filter: blur(8px);
-		border-radius: 8px;
-		padding: 6px;
-		pointer-events: auto;
-		transform-origin: center top;
-		z-index: 1001;
-		opacity: 0;
-		animation: fadeInToolbar 0.2s ease-out forwards;
-	}
-
-	@keyframes fadeInToolbar {
-		from {
-			opacity: 0;
-			transform: translateY(10px) scale(0.9);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0) scale(1);
-		}
-	}
-
-	.toolbar-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		background: rgba(255, 255, 255, 0.1);
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		border-radius: 6px;
-		color: white;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		padding: 0;
-	}
-
-	.toolbar-btn:hover {
-		background: rgba(255, 255, 255, 0.2);
-		border-color: rgba(255, 255, 255, 0.3);
-		transform: scale(1.05);
-	}
-
-	.toolbar-btn:active {
-		transform: scale(0.95);
-	}
-
-	.toolbar-btn svg {
-		width: 16px;
-		height: 16px;
-		stroke-width: 2;
+			width var(--focus-transition-duration) ease-in-out,
+			height var(--focus-transition-duration) ease-in-out,
+			left var(--focus-transition-duration) ease-in-out,
+			top var(--focus-transition-duration) ease-in-out;
 	}
 
 	/* Z-Index Indicator Styles */

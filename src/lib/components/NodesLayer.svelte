@@ -1,84 +1,82 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { AppBoxState } from '$lib/canvasState';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import NodeContainer from './NodeContainer.svelte';
+	import { getIntrinsicScaleFactor, getParallaxFactor } from '$lib/utils/depth';
+	import { FOCAL_PLANE_TARGET_SCALE, DOF_SHARPNESS_FACTOR } from '$lib/constants';
+	import { getViewportContext } from '$lib/contexts/viewportContext';
 
 	// --- Reactive State ---
 	const zoom = $derived(canvasStore.zoom);
 	const offsetX = $derived(canvasStore.offsetX);
 	const offsetY = $derived(canvasStore.offsetY);
 	const boxes = $derived(canvasStore.boxes);
-	const selectedBoxId = $derived(canvasStore.selectedBoxId);
 
-	// Determine the Z-level that is currently in focus
-	const focusedZ = $derived(() => {
-		if (selectedBoxId === null) return 0; // Default focus plane is at z=0
-		const selectedBox = boxes.find((b) => b.id === selectedBoxId);
-		return selectedBox ? selectedBox.z : 0;
+	// --- Viewport dimensions ---
+	let viewportWidth = $state(0);
+	let viewportHeight = $state(0);
+	onMount(() => {
+		const viewportContext = getViewportContext();
+		const unsubWidth = viewportContext.width.subscribe((w) => (viewportWidth = w));
+		const unsubHeight = viewportContext.height.subscribe((h) => (viewportHeight = h));
+		return () => {
+			unsubWidth();
+			unsubHeight();
+		};
 	});
 
-	// --- Depth Effect Calculations (relative to focusedZ) ---
-
-	// Parallax is based on absolute depth, not focus. It's a property of the layer itself.
-	function getParallaxFactor(z: number): number {
-		if (z >= 0) return 1.0;
-		return Math.max(0.1, 1.0 + z * 0.3);
-	}
-
-	// Scale is now relative to the focus plane.
-	function getScaleFactor(z: number, currentFocusedZ: number): number {
-		const relativeZ = z - currentFocusedZ;
-		if (relativeZ === 0) return 1.0; // The focused layer is at normal size
-		// Layers behind the focus plane get smaller.
-		return Math.max(0.3, 1.0 - Math.abs(relativeZ) * 0.15);
-	}
-
-	// Blur is applied to any layer not on the focus plane.
-	function getBlurAmount(z: number, currentFocusedZ: number): number {
-		const relativeZ = z - currentFocusedZ;
-		if (relativeZ === 0) return 0; // No blur on the focused layer
-		// Blur increases the further away from the focus plane.
-		return Math.min(8, Math.abs(relativeZ) * 2.5);
-	}
-
-	// Brightness is also relative to the focus plane.
-	function getBrightness(z: number, currentFocusedZ: number): number {
-		const relativeZ = z - currentFocusedZ;
-		if (relativeZ === 0) return 1.0; // Full brightness on focused layer
-		return Math.max(0.6, 1.0 - Math.abs(relativeZ) * 0.1);
-	}
+	// --- Depth Effect Calculations (based on global zoom) ---
 
 	// --- Transform & Filter String Generation ---
 
-	function getLayerStyles(z: number, currentFocusedZ: number) {
-		// Parallax transform
+	function getLayerStyles(z: number) {
 		const parallaxFactor = getParallaxFactor(z);
-		const parallaxOffsetX = offsetX * parallaxFactor;
-		const parallaxOffsetY = offsetY * parallaxFactor;
 
-		// Depth-based scale
-		const scaleFactor = getScaleFactor(z, currentFocusedZ);
-		const totalScale = zoom * scaleFactor;
-		const transform = `translate(${parallaxOffsetX}px, ${parallaxOffsetY}px) scale(${totalScale})`;
+		// --- Centered Parallax Calculation ---
+		// This adjusts the offset to make the parallax effect originate from the
+		// center of the viewport, rather than the top-left corner.
+		const parallaxCorrectionX = (viewportWidth / 2) * (1 - parallaxFactor);
+		const parallaxCorrectionY = (viewportHeight / 2) * (1 - parallaxFactor);
+		const parallaxOffsetX = offsetX * parallaxFactor + parallaxCorrectionX;
+		const parallaxOffsetY = offsetY * parallaxFactor + parallaxCorrectionY;
 
-		// Depth-based filters
-		const blurAmount = getBlurAmount(z, currentFocusedZ);
-		const brightness = getBrightness(z, currentFocusedZ);
+		// The layer's intrinsic scale based on its depth
+		const intrinsicScale = getIntrinsicScaleFactor(z);
+
+		// The final, total scale of the layer, combining global zoom and intrinsic scale
+		const totalEffectiveScale = zoom * intrinsicScale;
+
+		// The layer's transform
+		const transform = `translate(${parallaxOffsetX}px, ${parallaxOffsetY}px) scale(${totalEffectiveScale})`;
+
+		// --- Depth of Field Effects ---
+		// Calculate how far this layer's effective scale is from the ideal focal plane.
+		const focusDelta = Math.abs(FOCAL_PLANE_TARGET_SCALE - totalEffectiveScale);
+
+		// Blur and brightness are functions of this focus delta.
+		// Increased blur cap and more dramatic brightness drop-off
+		const blurAmount = Math.min(16, focusDelta * DOF_SHARPNESS_FACTOR);
+		const brightness = Math.max(0.5, 1.0 - focusDelta * 0.6);
 
 		const filters = [];
-		if (blurAmount > 0) filters.push(`blur(${blurAmount}px)`);
-		if (brightness < 1.0) filters.push(`brightness(${brightness})`);
+		if (blurAmount > 0.05) filters.push(`blur(${blurAmount}px)`);
+		if (brightness < 0.99) filters.push(`brightness(${brightness})`);
 		const filter = filters.length > 0 ? filters.join(' ') : 'none';
 
-		// Opacity for background layers (absolute, not relative)
-		const opacity = z < 0 ? Math.max(0.4, 1 + z * 0.15) : 1.0;
+		// Opacity is now also a function of the focus delta, but only for foreground items.
+		// Layers fade out as they become more out-of-focus.
+		let opacity = 1.0;
+		if (z > 0) {
+			opacity = Math.max(0, 1.0 - focusDelta * 0.8);
+		}
 
 		return { transform, filter, opacity, zIndex: z + 100 };
 	}
 
 	// --- Data Grouping ---
 
-	const boxesByZ = $derived(() => {
+	const boxesByZ = $derived.by(() => {
 		const groups = new Map<number, AppBoxState[]>();
 		boxes.forEach((box) => {
 			if (!groups.has(box.z)) {
@@ -91,8 +89,8 @@
 </script>
 
 <!-- Render each Z-layer with its own parallax transform -->
-{#each boxesByZ() as [z, layerBoxes] (z)}
-	{@const styles = getLayerStyles(z, focusedZ())}
+{#each boxesByZ as [z, layerBoxes] (z)}
+	{@const styles = getLayerStyles(z)}
 	<div
 		class="world-layer"
 		style:transform={styles.transform}
@@ -115,9 +113,6 @@
 		height: 100%;
 		transform-origin: 0 0;
 		pointer-events: none;
-		transition:
-			opacity 0.4s ease,
-			filter 0.4s ease,
-			transform 0.4s ease; /* Animate transform for smooth focus shifts */
+		/* Transitions are now handled by the main animation loop in the viewport for smoothness */
 	}
 </style>

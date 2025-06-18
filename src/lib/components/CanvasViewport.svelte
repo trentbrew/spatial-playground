@@ -10,6 +10,8 @@
 	import { zooming } from '$lib/interactions/zooming';
 	import { setViewportContext } from '$lib/contexts/viewportContext';
 	import ControlsOverlay from './ControlsOverlay.svelte';
+	import TracingIndicator from './TracingIndicator.svelte';
+	import ObstructionIndicator from './ObstructionIndicator.svelte';
 
 	// --- Constants ---
 	const SMOOTHING_FACTOR = 0.4;
@@ -17,6 +19,10 @@
 	// --- Utility Functions ---
 	function lerp(start: number, end: number, factor: number): number {
 		return start + (end - start) * factor;
+	}
+
+	function easeOutQuart(t: number): number {
+		return 1 - Math.pow(1 - t, 4);
 	}
 
 	let viewportElement: HTMLDivElement;
@@ -35,6 +41,7 @@
 	const targetZoom = $derived(canvasStore.targetZoom);
 	const targetOffsetX = $derived(canvasStore.targetOffsetX);
 	const targetOffsetY = $derived(canvasStore.targetOffsetY);
+	const animationDuration = $derived(canvasStore.animationDuration);
 
 	// Create writable stores for viewport element and dimensions
 	const viewportElementStore = writable<HTMLElement | null>(null);
@@ -42,57 +49,58 @@
 	const viewportHeightStore = writable<number>(0);
 
 	let animationFrameId: number | null = null;
+	let animationStartTime: number | null = null;
 
-	function animateView() {
+	// Store the state at the beginning of an animation
+	let animationSourceZoom = 1;
+	let animationSourceOffsetX = 0;
+	let animationSourceOffsetY = 0;
+
+	function animateView(time: number) {
 		if (!browser) return;
+		if (animationStartTime === null) {
+			animationStartTime = time;
+		}
 
-		// Capture state *before* this animation step for checks upon convergence
-		const wasFullscreen = fullscreenBoxId !== null;
-		const wasAnimatingFullscreen = isAnimatingDoublezoom;
-		const originalTargetZoom = targetZoom; // Store the target we were aiming for
+		const elapsedTime = time - animationStartTime;
+		const duration = animationDuration > 0 ? animationDuration : 1; // Avoid division by zero
+		const progress = Math.min(elapsedTime / duration, 1);
 
-		const currentSmoothing = isAnimatingDoublezoom ? SMOOTHING_FACTOR / 2.5 : SMOOTHING_FACTOR;
+		// Use gentle easing for smooth zoom, but linear for focus animations
+		const easedProgress = animationDuration <= 200 ? easeOutQuart(progress) : progress;
 
-		const newZoom = lerp(zoom, targetZoom, currentSmoothing);
-		const newOffsetX = lerp(offsetX, targetOffsetX, currentSmoothing);
-		const newOffsetY = lerp(offsetY, targetOffsetY, currentSmoothing);
+		const newZoom = lerp(animationSourceZoom, targetZoom, easedProgress);
+		const newOffsetX = lerp(animationSourceOffsetX, targetOffsetX, easedProgress);
+		const newOffsetY = lerp(animationSourceOffsetY, targetOffsetY, easedProgress);
 
 		// Update the actual viewport state in the store
 		canvasStore._setViewport({ zoom: newZoom, x: newOffsetX, y: newOffsetY });
 
-		// Check for convergence
-		const posThreshold = 0.1;
-		const zoomThreshold = 0.001;
-		if (
-			Math.abs(newOffsetX - targetOffsetX) < posThreshold &&
-			Math.abs(newOffsetY - targetOffsetY) < posThreshold &&
-			Math.abs(newZoom - targetZoom) < zoomThreshold
-		) {
+		// Check for convergence (progress >= 1)
+		if (progress >= 1) {
 			// Snap to final target values and stop animation
 			canvasStore._setViewport({ zoom: targetZoom, x: targetOffsetX, y: targetOffsetY });
 
 			// If exiting fullscreen, finalize the state *after* animation completes
-			// Check if we *were* fullscreen and the target matches the original view state
 			if (
-				canvasStore.fullscreenBoxId !== null && // Check if we are technically still in fullscreen state
+				canvasStore.fullscreenBoxId !== null &&
 				targetZoom === canvasStore.originalViewZoom &&
 				targetOffsetX === canvasStore.originalViewOffsetX &&
 				targetOffsetY === canvasStore.originalViewOffsetY
 			) {
-				canvasStore._finalizeExitFullscreen(); // Clear flags
+				canvasStore._finalizeExitFullscreen();
 			}
 
-			// Reset double-zoom animation flag if it was active and animation finished
+			// Reset animation flags
 			if (isAnimatingDoublezoom) {
 				canvasStore.setAnimatingDoublezoom(false);
 			}
-
-			// Clear fullscreen animation flag if it was active
-			if (wasAnimatingFullscreen) {
+			if (canvasStore.isAnimatingFullscreen) {
 				canvasStore.clearAnimatingFullscreen();
 			}
 
 			animationFrameId = null;
+			animationStartTime = null;
 		} else {
 			// Continue animation
 			animationFrameId = requestAnimationFrame(animateView);
@@ -101,11 +109,17 @@
 
 	function startAnimation() {
 		if (!browser) return;
-		// If an animation frame is already requested, canceling it and requesting a new one
-		// ensures the loop continues if the target changed mid-animation or immediately after convergence.
+		// If an animation frame is already requested, cancel it to restart.
 		if (animationFrameId) {
 			cancelAnimationFrame(animationFrameId);
 		}
+
+		// Store the starting point for the animation
+		animationSourceZoom = zoom;
+		animationSourceOffsetX = offsetX;
+		animationSourceOffsetY = offsetY;
+		animationStartTime = null; // Reset start time
+
 		animationFrameId = requestAnimationFrame(animateView);
 	}
 
@@ -240,49 +254,51 @@
 		viewportHeight: number
 	): { zoom: number; x: number; y: number } {
 		const padding = 50; // Add some padding around all boxes
-		const availableWidth = viewportWidth - padding * 2;
-		const availableHeight = viewportHeight - padding * 2;
+		const bboxWidth = bbox.width + padding * 2;
+		const bboxHeight = bbox.height + padding * 2;
 
-		// Calculate zoom to fit all boxes
-		const zoomX = availableWidth / bbox.width;
-		const zoomY = availableHeight / bbox.height;
-		const zoom = Math.min(zoomX, zoomY, 1); // Don't zoom in beyond 1x initially
+		const zoomX = viewportWidth / bboxWidth;
+		const zoomY = viewportHeight / bboxHeight;
+		const newZoom = Math.min(zoomX, zoomY, 1); // Cap initial zoom at 1
 
-		// Calculate offset to center the boxes
-		const centerX = bbox.minX + bbox.width / 2;
-		const centerY = bbox.minY + bbox.height / 2;
+		const newOffsetX = (viewportWidth - bbox.width * newZoom) / 2 - bbox.minX * newZoom;
+		const newOffsetY = (viewportHeight - bbox.height * newZoom) / 2 - bbox.minY * newZoom;
 
-		const x = viewportWidth / 2 - centerX * zoom;
-		const y = viewportHeight / 2 - centerY * zoom;
-
-		return { zoom, x, y };
+		return { zoom: newZoom, x: newOffsetX, y: newOffsetY };
 	}
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 <div
-	class="viewport"
 	bind:this={viewportElement}
+	class="viewport"
+	role="application"
 	use:panning
 	use:zooming
-	on:click={handleViewportClick}
-	on:keydown={handleKeyDown}
+	onclick={handleViewportClick}
+	onkeydown={handleKeyDown}
 	tabindex="0"
 >
 	<BackgroundCanvas />
 	<NodesLayer />
-	<ControlsOverlay />
-	<!-- TODO: Add InteractionManager -->
 </div>
+
+<ControlsOverlay />
+<TracingIndicator />
+<ObstructionIndicator />
 
 <style>
 	.viewport {
-		position: relative;
 		width: 100%;
 		height: 100%;
+		position: relative;
 		overflow: hidden;
-		background-color: var(--bg-color);
-		cursor: default;
-		touch-action: none; /* Prevent default touch actions like pinch-zoom */
-		overscroll-behavior: contain; /* Prevent browser back/forward navigation gestures */
+		background-color: var(--canvas-bg);
+		cursor: grab;
+		outline: none; /* Remove focus outline */
+	}
+
+	.viewport:active {
+		cursor: grabbing;
 	}
 </style>

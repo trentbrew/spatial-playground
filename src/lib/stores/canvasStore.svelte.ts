@@ -1,4 +1,11 @@
 import type { AppBoxState } from '$lib/canvasState';
+import {
+	FOCUS_TRANSITION_DURATION,
+	FOCAL_PLANE_TARGET_SCALE,
+	DOF_SHARPNESS_FACTOR
+} from '$lib/constants';
+import { getIntrinsicScaleFactor, getFocusZoomForZ, getParallaxFactor } from '$lib/utils/depth';
+import { detectObstruction } from '$lib/utils/obstruction';
 
 // --- Constants ---
 const ZOOM_PADDING_FACTOR = 0.5; // Zoom to 50% of viewport size
@@ -31,6 +38,7 @@ let fullscreenTransitionStartTime = $state<number | null>(null);
 let transitionSourceZoom = $state(1);
 let transitionSourceOffsetX = $state(0);
 let transitionSourceOffsetY = $state(0);
+let animationDuration = $state(0); // Add animation duration state
 
 let boxes = $state<AppBoxState[]>([
 	{
@@ -147,6 +155,9 @@ export const canvasStore = {
 	get transitionSourceOffsetY() {
 		return transitionSourceOffsetY;
 	},
+	get animationDuration() {
+		return animationDuration;
+	},
 	get boxes() {
 		return boxes;
 	},
@@ -166,6 +177,7 @@ export const canvasStore = {
 		offsetY = newOffsetY;
 		targetOffsetX = newOffsetX;
 		targetOffsetY = newOffsetY;
+		animationDuration = 0; // No animation for panning
 	},
 
 	// Set the target viewport state (used by zooming action)
@@ -173,6 +185,15 @@ export const canvasStore = {
 		targetZoom = target.zoom;
 		targetOffsetX = target.x;
 		targetOffsetY = target.y;
+		animationDuration = 0; // Raw zooming is not animated via store
+	},
+
+	// Set the target viewport state with smooth animation
+	setTargetViewportAnimated(target: { zoom: number; x: number; y: number }, duration: number) {
+		targetZoom = target.zoom;
+		targetOffsetX = target.x;
+		targetOffsetY = target.y;
+		animationDuration = duration; // Animate the zoom
 	},
 
 	// Set the actual viewport state (used by animation loop)
@@ -180,6 +201,9 @@ export const canvasStore = {
 		zoom = viewport.zoom;
 		offsetX = viewport.x;
 		offsetY = viewport.y;
+		if (zoomedBoxId !== null) {
+			this.restorePreviousZoom();
+		}
 	},
 
 	// Add a new box to the canvas
@@ -214,7 +238,8 @@ export const canvasStore = {
 			// If selecting a box in the background, zoom to it
 			const box = boxes.find((b) => b.id === id);
 			if (box && box.z < 0 && viewportWidth && viewportHeight) {
-				this.zoomToBox(id, viewportWidth, viewportHeight);
+				// This behavior is now handled by the click handler in NodeContainer
+				// this.zoomToBox(id, viewportWidth, viewportHeight);
 			}
 		} else {
 			// If deselecting, only clear selectedId, keep lastSelectedId
@@ -284,6 +309,7 @@ export const canvasStore = {
 		transitionSourceZoom = zoom;
 		transitionSourceOffsetX = offsetX;
 		transitionSourceOffsetY = offsetY;
+		animationDuration = FOCUS_TRANSITION_DURATION; // Use the constant
 	},
 
 	// Exit fullscreen mode
@@ -327,48 +353,75 @@ export const canvasStore = {
 		const box = boxes.find((b) => b.id === boxId);
 		if (!box) return;
 
-		// Store previous state for potential restoration
-		prevZoom = zoom;
-		prevOffsetX = offsetX;
-		prevOffsetY = offsetY;
+		const { x, y, width, height, z } = box;
 
-		// Calculate zoom to fit box with padding
-		const padding = Math.min(viewportWidth, viewportHeight) * ZOOM_PADDING_FACTOR;
-		const zoomX = (viewportWidth - padding) / box.width;
-		const zoomY = (viewportHeight - padding) / box.height;
-		const targetZoomValue = Math.min(zoomX, zoomY, 3); // Cap at 3x zoom
+		// 1. Get the target zoom for the box's z-plane to be in focus.
+		const newTargetZoom = getFocusZoomForZ(z);
 
-		// Calculate offset to center the box
-		const boxCenterX = box.x + box.width / 2;
-		const boxCenterY = box.y + box.height / 2;
-		const viewportCenterX = viewportWidth / 2;
-		const viewportCenterY = viewportHeight / 2;
+		// 2. Calculate the center of the box in world coordinates
+		const boxCenterX = x + width / 2;
+		const boxCenterY = y + height / 2;
 
-		const targetOffsetXValue = viewportCenterX - boxCenterX * targetZoomValue;
-		const targetOffsetYValue = viewportCenterY - boxCenterY * targetZoomValue;
+		// 3. Calculate initial offsets to center the box in the viewport
+		let newTargetOffsetX = viewportWidth / 2 - boxCenterX * newTargetZoom;
+		let newTargetOffsetY = viewportHeight / 2 - boxCenterY * newTargetZoom;
 
-		canvasStore.setTargetViewport({
-			zoom: targetZoomValue,
-			x: targetOffsetXValue,
-			y: targetOffsetYValue
-		});
+		// 4. Check for obstruction and adjust position if needed
+		const obstructionResult = detectObstruction(
+			box,
+			boxes,
+			newTargetZoom,
+			newTargetOffsetX,
+			newTargetOffsetY,
+			viewportWidth,
+			viewportHeight
+		);
 
-		zoomedBoxId = boxId;
-		isAnimatingDoublezoom = true;
+		if (obstructionResult.isObstructed) {
+			console.log(
+				`📦 Box ${boxId} is ${obstructionResult.obstructionPercentage.toFixed(1)}% obstructed by:`,
+				obstructionResult.obstructingBoxes.map((b) => `Box ${b.id} (z=${b.z})`).join(', ')
+			);
+
+			const avoidanceApplied = !!obstructionResult.avoidanceVector;
+
+			if (avoidanceApplied) {
+				console.log(`🎯 Applying avoidance vector:`, obstructionResult.avoidanceVector);
+				// Apply avoidance vector to offset
+				newTargetOffsetX += obstructionResult.avoidanceVector.x;
+				newTargetOffsetY += obstructionResult.avoidanceVector.y;
+			}
+
+			// Dispatch custom event for UI feedback
+			if (typeof window !== 'undefined') {
+				window.dispatchEvent(
+					new CustomEvent('obstruction-detected', {
+						detail: {
+							percentage: obstructionResult.obstructionPercentage,
+							obstructingBoxes: obstructionResult.obstructingBoxes.map((b) => `Box ${b.id}`),
+							avoidanceApplied
+						}
+					})
+				);
+			}
+		}
+
+		// 5. Set the animation target in the store.
+		targetZoom = newTargetZoom;
+		targetOffsetX = newTargetOffsetX;
+		targetOffsetY = newTargetOffsetY;
+		animationDuration = FOCUS_TRANSITION_DURATION; // Use a constant for smooth animation
 	},
 
 	// Restore previous zoom level
 	restorePreviousZoom() {
 		if (zoomedBoxId === null) return;
 
-		canvasStore.setTargetViewport({
-			zoom: prevZoom,
-			x: prevOffsetX,
-			y: prevOffsetY
-		});
-
-		zoomedBoxId = null;
-		isAnimatingDoublezoom = true;
+		targetZoom = prevZoom;
+		targetOffsetX = prevOffsetX;
+		targetOffsetY = prevOffsetY;
+		zoomedBoxId = null; // Clear the zoomed state
+		animationDuration = FOCUS_TRANSITION_DURATION; // Use the constant
 	},
 
 	// Set animation state
@@ -405,6 +458,7 @@ export const canvasStore = {
 			transitionSourceZoom,
 			transitionSourceOffsetX,
 			transitionSourceOffsetY,
+			animationDuration,
 			boxes,
 			selectedBoxId,
 			lastSelectedBoxId
