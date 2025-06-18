@@ -12,6 +12,7 @@
 	const offsetX = $derived(canvasStore.offsetX);
 	const offsetY = $derived(canvasStore.offsetY);
 	const boxes = $derived(canvasStore.boxes);
+	const draggingBoxId = $derived(canvasStore.draggingBoxId);
 
 	// --- Viewport dimensions ---
 	let viewportWidth = $state(0);
@@ -30,8 +31,9 @@
 
 	// --- Transform & Filter String Generation ---
 
-	function getLayerStyles(z: number) {
-		const parallaxFactor = getParallaxFactor(z);
+	function getLayerStyles(z: number, isDraggingLayer = false) {
+		// Use 1.0 parallax factor for dragging layers to disable parallax
+		const parallaxFactor = isDraggingLayer ? 1.0 : getParallaxFactor(z);
 
 		// --- Centered Parallax Calculation ---
 		// This adjusts the offset to make the parallax effect originate from the
@@ -76,20 +78,30 @@
 
 	// --- Data Grouping ---
 
-	const boxesByZ = $derived.by(() => {
+	const { normalBoxesByZ, draggingBox } = $derived.by(() => {
 		const groups = new Map<number, AppBoxState[]>();
+		let draggingBox: AppBoxState | null = null;
+
 		boxes.forEach((box) => {
-			if (!groups.has(box.z)) {
-				groups.set(box.z, []);
+			if (box.id === draggingBoxId) {
+				draggingBox = box;
+			} else {
+				if (!groups.has(box.z)) {
+					groups.set(box.z, []);
+				}
+				groups.get(box.z)!.push(box);
 			}
-			groups.get(box.z)!.push(box);
 		});
-		return Array.from(groups.entries()).sort(([a], [b]) => a - b);
+
+		return {
+			normalBoxesByZ: Array.from(groups.entries()).sort(([a], [b]) => a - b),
+			draggingBox
+		};
 	});
 </script>
 
 <!-- Render each Z-layer with its own parallax transform -->
-{#each boxesByZ as [z, layerBoxes] (z)}
+{#each normalBoxesByZ as [z, layerBoxes] (z)}
 	{@const styles = getLayerStyles(z)}
 	<div
 		class="world-layer"
@@ -104,6 +116,20 @@
 	</div>
 {/each}
 
+<!-- Render dragging box separately with no parallax -->
+{#if draggingBox}
+	{@const styles = getLayerStyles(draggingBox.z, true)}
+	<div
+		class="world-layer dragging-layer"
+		style:transform={styles.transform}
+		style:filter={styles.filter}
+		style:z-index={1000}
+		style:opacity={styles.opacity}
+	>
+		<NodeContainer box={draggingBox} />
+	</div>
+{/if}
+
 <style>
 	.world-layer {
 		position: absolute;
@@ -114,5 +140,12 @@
 		transform-origin: 0 0;
 		pointer-events: none;
 		/* Transitions are now handled by the main animation loop in the viewport for smoothness */
+	}
+
+	.dragging-layer {
+		/* Dragging layer gets highest z-index and direct 1:1 movement */
+		pointer-events: auto;
+		/* Subtle visual feedback that parallax is suspended */
+		filter: drop-shadow(0 0 8px rgba(74, 144, 226, 0.3));
 	}
 </style>

@@ -229,12 +229,16 @@
 
 				// Only execute if we have a selected box
 				if (selectedBoxId !== null) {
+					// Get current viewport dimensions for zoom following
+					const viewportWidth = viewportElement?.clientWidth || 0;
+					const viewportHeight = viewportElement?.clientHeight || 0;
+
 					if (event.key === ']') {
-						canvasStore.moveSelectedForward();
-						console.log(`Moved box ${selectedBoxId} forward in Z-axis`);
+						canvasStore.moveSelectedForward(viewportWidth, viewportHeight);
+						console.log(`Moved box ${selectedBoxId} forward in Z-axis with zoom following`);
 					} else if (event.key === '[') {
-						canvasStore.moveSelectedBackward();
-						console.log(`Moved box ${selectedBoxId} backward in Z-axis`);
+						canvasStore.moveSelectedBackward(viewportWidth, viewportHeight);
+						console.log(`Moved box ${selectedBoxId} backward in Z-axis with zoom following`);
 					}
 				}
 			}

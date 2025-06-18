@@ -40,7 +40,57 @@ let transitionSourceOffsetX = $state(0);
 let transitionSourceOffsetY = $state(0);
 let animationDuration = $state(0); // Add animation duration state
 
-// Generate a rich, multi-layered scene with varied nodes
+// Helper function to check if two boxes overlap (with padding)
+function boxesOverlap(
+	box1: { x: number; y: number; width: number; height: number },
+	box2: { x: number; y: number; width: number; height: number },
+	padding: number = 20
+): boolean {
+	return !(
+		box1.x + box1.width + padding < box2.x ||
+		box2.x + box2.width + padding < box1.x ||
+		box1.y + box1.height + padding < box2.y ||
+		box2.y + box2.height + padding < box1.y
+	);
+}
+
+// Find a non-overlapping position for a box at a specific Z level
+function findNonOverlappingPosition(
+	targetBox: { width: number; height: number; z: number },
+	existingBoxes: AppBoxState[],
+	maxAttempts: number = 50,
+	padding: number = 30
+): { x: number; y: number } {
+	const sameZBoxes = existingBoxes.filter((box) => box.z === targetBox.z);
+
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		const x = (Math.random() - 0.5) * 4000; // X from -2000 to +2000
+		const y = (Math.random() - 0.5) * 3000; // Y from -1500 to +1500
+
+		const testPosition = { x, y, width: targetBox.width, height: targetBox.height };
+
+		// Check if this position overlaps with any existing box at the same Z level
+		const hasOverlap = sameZBoxes.some((existingBox) =>
+			boxesOverlap(testPosition, existingBox, padding)
+		);
+
+		if (!hasOverlap) {
+			return { x: Math.round(x), y: Math.round(y) };
+		}
+	}
+
+	// Fallback: if we can't find a non-overlapping position, place it anyway
+	// but log a warning
+	console.warn(
+		`⚠️ Could not find non-overlapping position for Z${targetBox.z} box after ${maxAttempts} attempts`
+	);
+	return {
+		x: Math.round((Math.random() - 0.5) * 4000),
+		y: Math.round((Math.random() - 0.5) * 3000)
+	};
+}
+
+// Generate a rich, multi-layered scene with varied nodes and no overlaps per Z-level
 function generateRandomBoxes(): AppBoxState[] {
 	const colors = [
 		'#FF6B6B',
@@ -73,16 +123,22 @@ function generateRandomBoxes(): AppBoxState[] {
 	const nodeTypes = ['sticky', 'image', 'text', 'code'];
 	const boxes: AppBoxState[] = [];
 
-	// Create a diverse set of nodes across different depths
+	// Create a diverse set of nodes across different depths with collision avoidance
 	for (let i = 1; i <= 25; i++) {
-		const z = Math.floor(Math.random() * 7) - 3; // Z from -3 to +3
-		const x = (Math.random() - 0.5) * 2000; // X from -1000 to +1000
-		const y = (Math.random() - 0.5) * 1500; // Y from -750 to +750
+		const z = Math.floor(Math.random() * 4) - 3; // Z from -3 to 0
 
 		// Vary sizes based on depth for visual interest
 		const baseSize = z >= 0 ? 180 + Math.random() * 120 : 150 + Math.random() * 100;
 		const width = baseSize + Math.random() * 80;
 		const height = baseSize + Math.random() * 60;
+
+		// Find a non-overlapping position for this box
+		const position = findNonOverlappingPosition(
+			{ width: Math.round(width), height: Math.round(height), z },
+			boxes,
+			50, // max attempts
+			30 // padding between boxes
+		);
 
 		const color = colors[Math.floor(Math.random() * colors.length)];
 		const type = nodeTypes[Math.floor(Math.random() * nodeTypes.length)];
@@ -90,12 +146,11 @@ function generateRandomBoxes(): AppBoxState[] {
 		// Create content based on type and depth
 		let content = `${type.charAt(0).toUpperCase() + type.slice(1)} ${i}`;
 		if (z < 0) content += ` (Depth ${Math.abs(z)})`;
-		if (z > 0) content += ` (Layer +${z})`;
 
 		boxes.push({
 			id: i,
-			x: Math.round(x),
-			y: Math.round(y),
+			x: position.x,
+			y: position.y,
 			width: Math.round(width),
 			height: Math.round(height),
 			color,
@@ -105,42 +160,70 @@ function generateRandomBoxes(): AppBoxState[] {
 		});
 	}
 
-	// Add a few strategic overlapping nodes to showcase obstruction detection
+	// Add a few strategic test nodes - some overlapping to test obstruction detection
+	// Background test node (non-overlapping)
+	const testNode1Position = findNonOverlappingPosition(
+		{ width: 220, height: 180, z: -1 },
+		boxes,
+		50,
+		30
+	);
+	boxes.push({
+		id: 26,
+		x: testNode1Position.x,
+		y: testNode1Position.y,
+		width: 220,
+		height: 180,
+		color: '#FF6B6B',
+		content: 'Focus Test Node',
+		type: 'sticky',
+		z: -1 // Background - will zoom in to 1.67x
+	});
+
+	// Foreground test nodes (deliberately overlapping to test ghosting)
 	boxes.push(
 		{
-			id: 26,
-			x: 0,
-			y: 0,
-			width: 220,
-			height: 180,
-			color: '#FF6B6B',
-			content: 'Center Focus Node',
-			type: 'sticky',
-			z: 0 // Middle layer
-		},
-		{
 			id: 27,
-			x: 50,
-			y: 30,
+			x: 350,
+			y: 230,
 			width: 160,
 			height: 140,
 			color: '#4ECDC4',
 			content: 'Overlapping Front',
 			type: 'image',
-			z: 1 // In front of center node
+			z: 0 // Foreground - will zoom in to 1.5x
 		},
 		{
 			id: 28,
-			x: -30,
-			y: 60,
+			x: 320,
+			y: 250,
 			width: 180,
 			height: 120,
 			color: '#45B7D1',
 			content: 'Another Overlay',
 			type: 'text',
-			z: 2 // Even further in front
+			z: 0 // Foreground - will zoom in to 1.5x
 		}
 	);
+
+	// Add a special test node at Z=0 for testing boundary hit
+	const boundaryTestPosition = findNonOverlappingPosition(
+		{ width: 200, height: 150, z: 0 },
+		boxes,
+		50,
+		30
+	);
+	boxes.push({
+		id: 29,
+		x: boundaryTestPosition.x,
+		y: boundaryTestPosition.y,
+		width: 200,
+		height: 150,
+		color: '#FF6B9D',
+		content: 'Z-Boundary Test (try Cmd+] to hit screen!)',
+		type: 'sticky',
+		z: 0 // At the boundary - perfect for testing
+	});
 
 	const sortedBoxes = boxes.sort((a, b) => a.z - b.z); // Sort by z-index for proper rendering
 
@@ -151,11 +234,37 @@ function generateRandomBoxes(): AppBoxState[] {
 	});
 
 	console.log(
-		`🎨 Generated ${sortedBoxes.length} nodes across depths:`,
+		`🎨 Generated ${sortedBoxes.length} nodes across depths (Z-3 to Z0):`,
 		Array.from(depthCounts.entries())
 			.sort((a, b) => a[0] - b[0])
-			.map(([z, count]) => `Z${z >= 0 ? '+' : ''}${z}: ${count}`)
+			.map(([z, count]) => `Z${z}: ${count}`)
 			.join(', ')
+	);
+
+	// Report collision avoidance results
+	const overlapCounts = new Map<number, number>();
+	depthCounts.forEach((count, z) => {
+		const nodesAtZ = sortedBoxes.filter((box) => box.z === z);
+		let overlaps = 0;
+		for (let i = 0; i < nodesAtZ.length; i++) {
+			for (let j = i + 1; j < nodesAtZ.length; j++) {
+				if (boxesOverlap(nodesAtZ[i], nodesAtZ[j], 0)) {
+					overlaps++;
+				}
+			}
+		}
+		overlapCounts.set(z, overlaps);
+	});
+
+	const totalOverlaps = Array.from(overlapCounts.values()).reduce((sum, count) => sum + count, 0);
+	console.log(
+		`🚫 Collision avoidance results: ${totalOverlaps} overlaps remaining`,
+		totalOverlaps > 0
+			? Array.from(overlapCounts.entries())
+					.filter(([z, count]) => count > 0)
+					.map(([z, count]) => `Z${z}: ${count}`)
+					.join(', ')
+			: '(perfect spacing achieved!)'
 	);
 
 	// Debug parallax factors for each depth
@@ -173,6 +282,9 @@ function generateRandomBoxes(): AppBoxState[] {
 let boxes = $state<AppBoxState[]>(generateRandomBoxes());
 let selectedBoxId = $state<number | null>(null);
 let lastSelectedBoxId = $state<number | null>(null);
+let draggingBoxId = $state<number | null>(null);
+let ghostedBoxIds = $state<Set<number>>(new Set());
+let boundaryHitBoxId = $state<number | null>(null); // Track which box hit the Z-boundary
 
 // Store functions
 export const canvasStore = {
@@ -252,6 +364,15 @@ export const canvasStore = {
 	get lastSelectedBoxId() {
 		return lastSelectedBoxId;
 	},
+	get draggingBoxId() {
+		return draggingBoxId;
+	},
+	get ghostedBoxIds() {
+		return ghostedBoxIds;
+	},
+	get boundaryHitBoxId() {
+		return boundaryHitBoxId;
+	},
 
 	// Pan the view by a delta (updates current state directly for responsiveness)
 	panBy(dx: number, dy: number) {
@@ -286,14 +407,25 @@ export const canvasStore = {
 		zoom = viewport.zoom;
 		offsetX = viewport.x;
 		offsetY = viewport.y;
-		if (zoomedBoxId !== null) {
-			this.restorePreviousZoom();
-		}
 	},
 
-	// Add a new box to the canvas
-	addBox(box: AppBoxState) {
-		boxes.push(box);
+	// Add a new box to the canvas with optional collision avoidance
+	addBox(box: AppBoxState, avoidOverlaps: boolean = true) {
+		if (avoidOverlaps) {
+			// Find a non-overlapping position for the new box
+			const position = findNonOverlappingPosition(
+				{ width: box.width, height: box.height, z: box.z },
+				boxes,
+				50, // max attempts
+				30 // padding
+			);
+
+			// Create the final box with the collision-free position
+			const finalBox = { ...box, x: position.x, y: position.y };
+			boxes.push(finalBox);
+		} else {
+			boxes.push(box);
+		}
 	},
 
 	// Update an existing box by partial properties
@@ -329,6 +461,9 @@ export const canvasStore = {
 		} else {
 			// If deselecting, only clear selectedId, keep lastSelectedId
 			selectedBoxId = null;
+
+			// Clear any ghosted nodes when deselecting
+			this.clearGhostedNodes();
 
 			// Also restore previous zoom if we were zoomed in
 			if (zoomedBoxId !== null) {
@@ -433,23 +568,43 @@ export const canvasStore = {
 		fullscreenTransitionStartTime = null;
 	},
 
-	// Zoom to a specific box with padding
+	// Zoom to a specific box with padding - ensuring perfect centering
 	zoomToBox(boxId: number, viewportWidth: number, viewportHeight: number) {
 		const box = boxes.find((b) => b.id === boxId);
 		if (!box) return;
 
 		const { x, y, width, height, z } = box;
 
-		// 1. Get the target zoom for the box's z-plane to be in focus.
-		const newTargetZoom = getFocusZoomForZ(z);
+		// Store previous zoom state before starting transition
+		if (zoomedBoxId === null) {
+			prevZoom = zoom;
+			prevOffsetX = offsetX;
+			prevOffsetY = offsetY;
+		}
+		zoomedBoxId = boxId;
 
-		// 2. Calculate the center of the box in world coordinates
+		// 1. Calculate the center of the box in world coordinates
 		const boxCenterX = x + width / 2;
 		const boxCenterY = y + height / 2;
 
-		// 3. Calculate initial offsets to center the box in the viewport
+		// 2. Get the target zoom for the box's z-plane to be in focus
+		const newTargetZoom = getFocusZoomForZ(z);
+
+		// 3. Calculate offsets to perfectly center the box at the target zoom level
+		// Formula: to center point P at zoom Z in viewport of size V:
+		// offset = (viewport_center) - (world_point * zoom)
 		let newTargetOffsetX = viewportWidth / 2 - boxCenterX * newTargetZoom;
 		let newTargetOffsetY = viewportHeight / 2 - boxCenterY * newTargetZoom;
+
+		console.log(
+			`🎯 Zoom to Box ${boxId}:`,
+			`\n  Box: (${x}, ${y}) ${width}x${height} Z:${z}`,
+			`\n  Box Center: (${boxCenterX.toFixed(1)}, ${boxCenterY.toFixed(1)})`,
+			`\n  Viewport: ${viewportWidth}x${viewportHeight}`,
+			`\n  Viewport Center: (${(viewportWidth / 2).toFixed(1)}, ${(viewportHeight / 2).toFixed(1)})`,
+			`\n  Current: zoom=${zoom.toFixed(2)} offset=(${offsetX.toFixed(1)}, ${offsetY.toFixed(1)})`,
+			`\n  Target: zoom=${newTargetZoom.toFixed(2)} offset=(${newTargetOffsetX.toFixed(1)}, ${newTargetOffsetY.toFixed(1)})`
+		);
 
 		// 4. Check for obstruction and adjust position if needed
 		const obstructionResult = detectObstruction(
@@ -491,11 +646,23 @@ export const canvasStore = {
 			}
 		}
 
-		// 5. Set the animation target in the store.
+		// 5. Set the animation target in the store
 		targetZoom = newTargetZoom;
 		targetOffsetX = newTargetOffsetX;
 		targetOffsetY = newTargetOffsetY;
 		animationDuration = FOCUS_TRANSITION_DURATION; // Use a constant for smooth animation
+
+		// 6. Verify the calculation by checking where the box center will appear after animation
+		const finalBoxScreenX = boxCenterX * newTargetZoom + newTargetOffsetX;
+		const finalBoxScreenY = boxCenterY * newTargetZoom + newTargetOffsetY;
+		const expectedCenterX = viewportWidth / 2;
+		const expectedCenterY = viewportHeight / 2;
+
+		console.log(
+			`📐 Verification: Box center will appear at screen (${finalBoxScreenX.toFixed(1)}, ${finalBoxScreenY.toFixed(1)})`,
+			`\n  Expected center: (${expectedCenterX.toFixed(1)}, ${expectedCenterY.toFixed(1)})`,
+			`\n  Error: (${(finalBoxScreenX - expectedCenterX).toFixed(1)}, ${(finalBoxScreenY - expectedCenterY).toFixed(1)})`
+		);
 	},
 
 	// Restore previous zoom level
@@ -550,38 +717,110 @@ export const canvasStore = {
 		};
 	},
 
-	// Z-axis management functions
-	moveBoxForward(boxId: number) {
+	// Z-axis management functions with zoom following and boundary enforcement
+	moveBoxForward(boxId: number, viewportWidth?: number, viewportHeight?: number) {
 		const boxIndex = boxes.findIndex((box) => box.id === boxId);
 		if (boxIndex !== -1) {
+			const oldZ = boxes[boxIndex].z;
+			const newZ = oldZ + 1;
+
+			// Check Z-axis boundary - prevent going above Z=0 (screen surface)
+			if (newZ > 0) {
+				console.log(`🚫 Box ${boxId} hit the screen surface! Cannot move beyond Z=0`);
+				// Trigger boundary hit effect
+				this.triggerBoundaryHit(boxId);
+				return; // Don't move the box
+			}
+
 			boxes[boxIndex] = {
 				...boxes[boxIndex],
-				z: boxes[boxIndex].z + 1
+				z: newZ
 			};
+
+			// If viewport dimensions are provided, smoothly zoom to the new focus level
+			if (viewportWidth && viewportHeight) {
+				const newFocusZoom = getFocusZoomForZ(newZ);
+				const box = boxes[boxIndex];
+
+				// Calculate center position for smooth transition
+				const boxCenterX = box.x + box.width / 2;
+				const boxCenterY = box.y + box.height / 2;
+
+				// Center the box at the new zoom level
+				const newTargetOffsetX = viewportWidth / 2 - boxCenterX * newFocusZoom;
+				const newTargetOffsetY = viewportHeight / 2 - boxCenterY * newFocusZoom;
+
+				// Set smooth animation targets
+				targetZoom = newFocusZoom;
+				targetOffsetX = newTargetOffsetX;
+				targetOffsetY = newTargetOffsetY;
+				animationDuration = 250; // Smooth transition
+
+				// Update ghosting after a brief delay to let the zoom settle
+				setTimeout(() => {
+					this.checkAndGhostObstructors(boxId, viewportWidth, viewportHeight);
+				}, 100);
+
+				console.log(
+					`📈 Moving Box ${boxId} forward: Z${oldZ} → Z${newZ}, zoom: ${zoom.toFixed(2)} → ${newFocusZoom.toFixed(2)}`
+				);
+			}
 		}
 	},
 
-	moveBoxBackward(boxId: number) {
+	moveBoxBackward(boxId: number, viewportWidth?: number, viewportHeight?: number) {
 		const boxIndex = boxes.findIndex((box) => box.id === boxId);
 		if (boxIndex !== -1) {
+			const oldZ = boxes[boxIndex].z;
+			const newZ = oldZ - 1;
+
 			boxes[boxIndex] = {
 				...boxes[boxIndex],
-				z: boxes[boxIndex].z - 1
+				z: newZ
 			};
+
+			// If viewport dimensions are provided, smoothly zoom to the new focus level
+			if (viewportWidth && viewportHeight) {
+				const newFocusZoom = getFocusZoomForZ(newZ);
+				const box = boxes[boxIndex];
+
+				// Calculate center position for smooth transition
+				const boxCenterX = box.x + box.width / 2;
+				const boxCenterY = box.y + box.height / 2;
+
+				// Center the box at the new zoom level
+				const newTargetOffsetX = viewportWidth / 2 - boxCenterX * newFocusZoom;
+				const newTargetOffsetY = viewportHeight / 2 - boxCenterY * newFocusZoom;
+
+				// Set smooth animation targets
+				targetZoom = newFocusZoom;
+				targetOffsetX = newTargetOffsetX;
+				targetOffsetY = newTargetOffsetY;
+				animationDuration = 250; // Smooth transition
+
+				// Update ghosting after a brief delay to let the zoom settle
+				setTimeout(() => {
+					this.checkAndGhostObstructors(boxId, viewportWidth, viewportHeight);
+				}, 100);
+
+				console.log(
+					`📉 Moving Box ${boxId} backward: Z${oldZ} → Z${newZ}, zoom: ${zoom.toFixed(2)} → ${newFocusZoom.toFixed(2)}`
+				);
+			}
 		}
 	},
 
-	// Move selected box forward (Cmd+])
-	moveSelectedForward() {
+	// Move selected box forward (Cmd+]) with zoom following
+	moveSelectedForward(viewportWidth?: number, viewportHeight?: number) {
 		if (selectedBoxId !== null) {
-			canvasStore.moveBoxForward(selectedBoxId);
+			canvasStore.moveBoxForward(selectedBoxId, viewportWidth, viewportHeight);
 		}
 	},
 
-	// Move selected box backward (Cmd+[)
-	moveSelectedBackward() {
+	// Move selected box backward (Cmd+[) with zoom following
+	moveSelectedBackward(viewportWidth?: number, viewportHeight?: number) {
 		if (selectedBoxId !== null) {
-			canvasStore.moveBoxBackward(selectedBoxId);
+			canvasStore.moveBoxBackward(selectedBoxId, viewportWidth, viewportHeight);
 		}
 	},
 
@@ -595,6 +834,112 @@ export const canvasStore = {
 		boxes = generateRandomBoxes();
 		selectedBoxId = null;
 		lastSelectedBoxId = null;
-		console.log(`🎲 Generated ${boxes.length} new nodes across depths -3 to +3`);
+		draggingBoxId = null;
+		console.log(`🎲 Generated ${boxes.length} new nodes across depths Z-3 to Z0`);
+	},
+
+	// Set dragging state for parallax suspension
+	setDragging(boxId: number | null) {
+		if (boxId !== null) {
+			console.log(`🎯 Suspending parallax for Box ${boxId} during drag`);
+		} else {
+			console.log(`🔄 Restoring parallax after drag completion`);
+		}
+		draggingBoxId = boxId;
+	},
+
+	// Center a box in the viewport with smooth animation
+	centerBox(boxId: number, viewportWidth: number, viewportHeight: number) {
+		const box = boxes.find((b) => b.id === boxId);
+		if (!box) return;
+
+		// Calculate the center of the box in world coordinates
+		const boxCenterX = box.x + box.width / 2;
+		const boxCenterY = box.y + box.height / 2;
+
+		// Calculate offsets to center the box in the viewport at current zoom
+		const newTargetOffsetX = viewportWidth / 2 - boxCenterX * zoom;
+		const newTargetOffsetY = viewportHeight / 2 - boxCenterY * zoom;
+
+		// Set the animation target for smooth centering
+		targetOffsetX = newTargetOffsetX;
+		targetOffsetY = newTargetOffsetY;
+		animationDuration = 200; // Smooth but quick centering animation
+
+		console.log(`🎯 Centering Box ${boxId} at zoom ${zoom.toFixed(2)}`);
+	},
+
+	// Check for obstruction and ghost blocking nodes
+	checkAndGhostObstructors(boxId: number, viewportWidth: number, viewportHeight: number) {
+		const box = boxes.find((b) => b.id === boxId);
+		if (!box) return;
+
+		// Use the obstruction detection system
+		const obstructionResult = detectObstruction(
+			box,
+			boxes,
+			zoom,
+			offsetX,
+			offsetY,
+			viewportWidth,
+			viewportHeight
+		);
+
+		// Clear previous ghosted nodes
+		ghostedBoxIds.clear();
+
+		if (obstructionResult.isObstructed && obstructionResult.obstructingBoxes.length > 0) {
+			// Ghost the obstructing boxes
+			obstructionResult.obstructingBoxes.forEach((obstructingBox) => {
+				ghostedBoxIds.add(obstructingBox.id);
+			});
+
+			console.log(
+				`👻 Ghosting ${obstructionResult.obstructingBoxes.length} obstructing boxes:`,
+				obstructionResult.obstructingBoxes.map((b) => `Box ${b.id}`).join(', ')
+			);
+
+			// Trigger reactivity by creating a new Set
+			ghostedBoxIds = new Set(ghostedBoxIds);
+		}
+	},
+
+	// Clear all ghosted nodes
+	clearGhostedNodes() {
+		if (ghostedBoxIds.size > 0) {
+			console.log('✨ Clearing all ghosted nodes');
+			ghostedBoxIds.clear();
+			ghostedBoxIds = new Set(ghostedBoxIds); // Trigger reactivity
+		}
+	},
+
+	// Set zoom level directly (for slider)
+	setZoom(newZoom: number) {
+		const clampedZoom = Math.max(0.1, Math.min(10, newZoom)); // Clamp between 0.1x and 10x
+		zoom = clampedZoom;
+		targetZoom = clampedZoom;
+		console.log(`🔍 Zoom set to ${clampedZoom.toFixed(2)}x via slider`);
+	},
+
+	// Trigger boundary hit effect when node hits screen surface (Z=0)
+	triggerBoundaryHit(boxId: number) {
+		// Set the boundary hit state for visual feedback
+		boundaryHitBoxId = boxId;
+
+		// Play the plunk sound effect
+		try {
+			const audio = new Audio('/audio/plunk3.wav');
+			audio.volume = 0.3; // Keep it subtle
+			audio.play().catch(console.warn); // Ignore audio play errors
+		} catch (error) {
+			console.warn('Could not play boundary hit sound:', error);
+		}
+
+		// Clear the boundary hit state after animation
+		setTimeout(() => {
+			boundaryHitBoxId = null;
+		}, 500); // 500ms flash duration
+
+		console.log(`💥 Box ${boxId} hit the Z-boundary with visual and audio feedback`);
 	}
 };

@@ -33,6 +33,9 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 		startY = event.clientY;
 		isDragging = true;
 
+		// Set dragging state to suspend parallax for this node
+		canvasStore.setDragging(boxId);
+
 		node.setPointerCapture(event.pointerId);
 		node.addEventListener('pointermove', handlePointerMove);
 		node.addEventListener('pointerup', handlePointerUp);
@@ -52,6 +55,10 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 
 	function handlePointerUp(event: PointerEvent) {
 		isDragging = false;
+
+		// Clear dragging state to restore parallax
+		canvasStore.setDragging(null);
+
 		node.releasePointerCapture(event.pointerId);
 		node.removeEventListener('pointermove', handlePointerMove);
 		node.removeEventListener('pointerup', handlePointerUp);

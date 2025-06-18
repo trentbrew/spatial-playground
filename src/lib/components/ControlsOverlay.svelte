@@ -58,6 +58,25 @@
 	function handleRegenerateScene() {
 		canvasStore.regenerateScene();
 	}
+
+	// Zoom slider state and handlers
+	let zoomSliderValue = $state(1);
+
+	// Sync slider with current zoom
+	$effect(() => {
+		zoomSliderValue = currentZoom;
+	});
+
+	function handleZoomSlider(event: Event) {
+		const target = event.target as HTMLInputElement;
+		const newZoom = parseFloat(target.value);
+		canvasStore.setZoom(newZoom);
+	}
+
+	// Zoom presets
+	function setZoomPreset(zoomLevel: number) {
+		canvasStore.setZoom(zoomLevel);
+	}
 </script>
 
 <div class="controls-container">
@@ -70,6 +89,25 @@
 		🎲 New Scene
 	</button>
 	<ThemeToggle />
+
+	<!-- Zoom Controls -->
+	<div class="zoom-controls">
+		<span class="zoom-label">🔍</span>
+		<button class="zoom-preset" onclick={() => setZoomPreset(0.25)} title="25%">¼</button>
+		<button class="zoom-preset" onclick={() => setZoomPreset(0.5)} title="50%">½</button>
+		<button class="zoom-preset" onclick={() => setZoomPreset(1)} title="100%">1</button>
+		<input
+			type="range"
+			min="0.1"
+			max="5"
+			step="0.1"
+			value={zoomSliderValue}
+			oninput={handleZoomSlider}
+			class="zoom-slider"
+			title="Zoom: {(currentZoom * 100).toFixed(0)}%"
+		/>
+		<span class="zoom-value">{(currentZoom * 100).toFixed(0)}%</span>
+	</div>
 
 	<!-- Debug Controls -->
 	<div class="debug-controls" class:hidden={selectedBoxId === null}>
@@ -157,6 +195,80 @@
 
 	.regenerate-button:hover {
 		background-color: #5f27cd;
+	}
+
+	/* Zoom Controls */
+	.zoom-controls {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-left: 10px;
+		padding-left: 10px;
+		border-left: 1px solid rgba(255, 255, 255, 0.2);
+	}
+
+	.zoom-label {
+		font-size: 14px;
+		opacity: 0.8;
+	}
+
+	.zoom-preset {
+		padding: 2px 6px;
+		background-color: rgba(255, 255, 255, 0.1);
+		color: var(--text-color);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 3px;
+		cursor: pointer;
+		font-size: 10px;
+		font-weight: bold;
+		min-width: 20px;
+		text-align: center;
+		transition: all 0.2s ease;
+	}
+
+	.zoom-preset:hover {
+		background-color: rgba(255, 255, 255, 0.2);
+		border-color: rgba(255, 255, 255, 0.4);
+	}
+
+	.zoom-slider {
+		width: 100px;
+		height: 4px;
+		background: rgba(255, 255, 255, 0.2);
+		border-radius: 2px;
+		outline: none;
+		cursor: pointer;
+		-webkit-appearance: none;
+	}
+
+	.zoom-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		width: 14px;
+		height: 14px;
+		background: #4ecdc4;
+		border-radius: 50%;
+		cursor: pointer;
+		border: 2px solid white;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+	}
+
+	.zoom-slider::-moz-range-thumb {
+		width: 14px;
+		height: 14px;
+		background: #4ecdc4;
+		border-radius: 50%;
+		cursor: pointer;
+		border: 2px solid white;
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+	}
+
+	.zoom-value {
+		font-size: 11px;
+		font-family: monospace;
+		font-weight: bold;
+		color: var(--text-color);
+		min-width: 35px;
+		text-align: right;
 	}
 
 	.debug-controls {

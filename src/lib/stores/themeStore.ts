@@ -13,11 +13,7 @@ function getInitialTheme(): Theme {
 	if (storedTheme) {
 		return storedTheme;
 	}
-	// 2. Check system preference
-	if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-		return 'dark';
-	}
-	// 3. Default to light
+	// 2. Always default to light mode (ignoring system preference)
 	return 'light';
 }
 
@@ -36,14 +32,4 @@ if (browser) {
 
 	// Initial set on load
 	document.documentElement.setAttribute('data-theme', initialTheme);
-
-	// Also listen for system preference changes
-	window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-		// Only update if localStorage isn't explicitly set
-		if (!localStorage.getItem('theme')) {
-			const newColorScheme: Theme = e.matches ? 'dark' : 'light';
-			theme.set(newColorScheme);
-			console.log(`System theme changed to: ${newColorScheme}. Updated store.`);
-		}
-	});
 }

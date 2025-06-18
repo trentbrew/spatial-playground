@@ -12,7 +12,9 @@ import { FOCAL_PLANE_TARGET_SCALE } from '$lib/constants';
 export const getFocusZoomForZ = (z: number): number => {
 	// The base of the exponent determines how dramatically focus changes with Z.
 	// 0.6 was chosen for a more dramatic effect.
-	return Math.pow(0.6, z);
+	// For Z=0 (foreground), we add a minimum zoom to make interaction feel responsive
+	const baseZoom = Math.pow(0.6, z);
+	return Math.max(1.5, baseZoom); // Minimum 1.5x zoom for better UX
 };
 
 /**

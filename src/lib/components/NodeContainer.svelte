@@ -34,6 +34,12 @@
 	const isAnimatingFullscreen = $derived(canvasStore.isAnimatingFullscreen);
 	const lastSelectedBoxId = $derived(canvasStore.lastSelectedBoxId);
 	const currentZoom = $derived(canvasStore.zoom); // Need current zoom level
+	const ghostedBoxIds = $derived(canvasStore.ghostedBoxIds);
+	const boundaryHitBoxId = $derived(canvasStore.boundaryHitBoxId);
+
+	// Check if this box is ghosted or hit the boundary
+	const isGhosted = $derived(ghostedBoxIds.has(box.id));
+	const isBoundaryHit = $derived(boundaryHitBoxId === box.id);
 
 	const Component = nodeComponentMap[box.type] || nodeComponentMap['sticky'];
 
@@ -44,18 +50,17 @@
 	function handleClick(event: MouseEvent) {
 		console.log(`[NodeContainer] Clicked box id: ${box.id}`, box);
 
-		// Start animation tracing automatically
-		if (typeof window !== 'undefined' && window.animationTracer) {
-			console.log('🔍 Auto-starting animation trace for click...');
-			window.animationTracer.traceZoomToBox(box.id, viewportWidth, viewportHeight);
-		} else {
-			// Fallback to manual zoom if tracer not available
-			console.log('⚠️ Animation tracer not available, using manual zoom');
-			// Always select the box first
-			canvasStore.selectBox(box.id);
-			// Then, trigger the zoom-to-focus animation
-			canvasStore.zoomToBox(box.id, viewportWidth, viewportHeight);
-		}
+		// Always select the box first
+		canvasStore.selectBox(box.id);
+
+		// Zoom to focus on the box (this includes centering + zoom)
+		canvasStore.zoomToBox(box.id, viewportWidth, viewportHeight);
+
+		// Check for obstruction and ghost blocking nodes
+		setTimeout(() => {
+			// Delay slightly to allow zoom animation to start
+			canvasStore.checkAndGhostObstructors(box.id, viewportWidth, viewportHeight);
+		}, 100);
 	}
 
 	function handleDoubleClick(event: MouseEvent) {
@@ -108,6 +113,8 @@
 	class:fullscreen={fullscreenBoxId === box.id}
 	class:fullscreen-transition={isAnimatingFullscreen && fullscreenBoxId === box.id}
 	class:quick-focus-active={zoomedBoxId === box.id && currentZoom > 1.0}
+	class:ghosted={isGhosted}
+	class:boundary-hit={isBoundaryHit}
 	style:left="{box.x}px"
 	style:top="{box.y}px"
 	style:width="{box.width}px"
@@ -121,7 +128,11 @@
 			: lastSelectedBoxId === box.id
 				? 5
 				: 1}
-	style:pointer-events={fullscreenBoxId !== null && box.id !== fullscreenBoxId ? 'none' : 'auto'}
+	style:pointer-events={isGhosted
+		? 'none'
+		: fullscreenBoxId !== null && box.id !== fullscreenBoxId
+			? 'none'
+			: 'auto'}
 >
 	<!-- Drag handle placeholder -->
 	<div
@@ -390,5 +401,66 @@
 		opacity: 0.8;
 		font-weight: normal;
 		margin-left: 4px;
+	}
+
+	/* Ghosted node styles - completely transparent and non-interactive */
+	.box.ghosted {
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.3s ease-out;
+	}
+
+	/* Boundary hit animation - red flash with springy bounce when hitting Z=0 boundary */
+	.box.boundary-hit {
+		border-color: #ff4444 !important;
+		box-shadow:
+			0 0 0 4px rgba(255, 68, 68, 0.5),
+			0 0 20px rgba(255, 68, 68, 0.3) !important;
+		animation:
+			boundary-flash 0.5s ease-out,
+			boundary-spring 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+	}
+
+	@keyframes boundary-flash {
+		0% {
+			border-color: #ff4444;
+			box-shadow:
+				0 0 0 4px rgba(255, 68, 68, 0.8),
+				0 0 30px rgba(255, 68, 68, 0.6);
+		}
+		50% {
+			border-color: #ff6666;
+			box-shadow:
+				0 0 0 6px rgba(255, 68, 68, 0.6),
+				0 0 25px rgba(255, 68, 68, 0.4);
+		}
+		100% {
+			border-color: var(--box-border-color);
+			box-shadow: none;
+		}
+	}
+
+	@keyframes boundary-spring {
+		0% {
+			transform: scale(1) translateZ(0);
+		}
+		15% {
+			transform: scale(0.95) translateZ(0);
+		}
+		30% {
+			transform: scale(1.05) translateZ(0);
+		}
+		45% {
+			transform: scale(0.98) translateZ(0);
+		}
+		60% {
+			transform: scale(1.02) translateZ(0);
+		}
+		75% {
+			transform: scale(0.99) translateZ(0);
+		}
+		100% {
+			transform: scale(1) translateZ(0);
+		}
 	}
 </style>
