@@ -54,10 +54,21 @@
 		// TODO: Implement addBox logic similar to legacy or refine
 		console.log('Add box clicked - Placeholder');
 	}
+
+	function handleRegenerateScene() {
+		canvasStore.regenerateScene();
+	}
 </script>
 
 <div class="controls-container">
 	<button class="control-button" onclick={handleAddBox}> + Add Box </button>
+	<button
+		class="control-button regenerate-button"
+		onclick={handleRegenerateScene}
+		title="Generate new random scene"
+	>
+		🎲 New Scene
+	</button>
 	<ThemeToggle />
 
 	<!-- Debug Controls -->
@@ -137,6 +148,15 @@
 	}
 	.control-button:hover {
 		background-color: var(--control-button-hover-bg);
+	}
+
+	.regenerate-button {
+		background-color: #6c5ce7;
+		color: white;
+	}
+
+	.regenerate-button:hover {
+		background-color: #5f27cd;
 	}
 
 	.debug-controls {

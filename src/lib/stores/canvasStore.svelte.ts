@@ -40,52 +40,137 @@ let transitionSourceOffsetX = $state(0);
 let transitionSourceOffsetY = $state(0);
 let animationDuration = $state(0); // Add animation duration state
 
-let boxes = $state<AppBoxState[]>([
-	{
-		id: 1,
-		x: 100,
-		y: 100,
-		width: 200,
-		height: 200,
-		color: 'lightblue',
-		content: 'Box 1',
-		type: 'sticky',
-		z: 0 // Foreground layer
-	},
-	{
-		id: 2,
-		x: 400,
-		y: 250,
-		width: 200,
-		height: 200,
-		color: 'lightcoral',
-		content: 'Box 2',
-		type: 'sticky',
-		z: -1 // Background layer - will have parallax effect
-	},
-	{
-		id: 3,
-		x: -150,
-		y: 400,
-		width: 250,
-		height: 200,
-		color: 'lightgoldenrodyellow',
-		content: 'Box 3',
-		type: 'sticky',
-		z: 1 // Further foreground
-	},
-	{
-		id: 4,
-		x: 350,
-		y: -100,
-		width: 200,
-		height: 300,
-		color: 'lightseagreen',
-		content: 'Box 4',
-		type: 'sticky',
-		z: -2 // Deep background - more parallax
+// Generate a rich, multi-layered scene with varied nodes
+function generateRandomBoxes(): AppBoxState[] {
+	const colors = [
+		'#FF6B6B',
+		'#4ECDC4',
+		'#45B7D1',
+		'#96CEB4',
+		'#FECA57',
+		'#FF9FF3',
+		'#54A0FF',
+		'#5F27CD',
+		'#00D2D3',
+		'#FF9F43',
+		'#10AC84',
+		'#EE5A24',
+		'#0984E3',
+		'#6C5CE7',
+		'#A29BFE',
+		'#FD79A8',
+		'#FDCB6E',
+		'#E17055',
+		'#81ECEC',
+		'#74B9FF',
+		'#55A3FF',
+		'#26DE81',
+		'#FD79A8',
+		'#A29BFE',
+		'#6C5CE7'
+	];
+
+	const nodeTypes = ['sticky', 'image', 'text', 'code'];
+	const boxes: AppBoxState[] = [];
+
+	// Create a diverse set of nodes across different depths
+	for (let i = 1; i <= 25; i++) {
+		const z = Math.floor(Math.random() * 7) - 3; // Z from -3 to +3
+		const x = (Math.random() - 0.5) * 2000; // X from -1000 to +1000
+		const y = (Math.random() - 0.5) * 1500; // Y from -750 to +750
+
+		// Vary sizes based on depth for visual interest
+		const baseSize = z >= 0 ? 180 + Math.random() * 120 : 150 + Math.random() * 100;
+		const width = baseSize + Math.random() * 80;
+		const height = baseSize + Math.random() * 60;
+
+		const color = colors[Math.floor(Math.random() * colors.length)];
+		const type = nodeTypes[Math.floor(Math.random() * nodeTypes.length)];
+
+		// Create content based on type and depth
+		let content = `${type.charAt(0).toUpperCase() + type.slice(1)} ${i}`;
+		if (z < 0) content += ` (Depth ${Math.abs(z)})`;
+		if (z > 0) content += ` (Layer +${z})`;
+
+		boxes.push({
+			id: i,
+			x: Math.round(x),
+			y: Math.round(y),
+			width: Math.round(width),
+			height: Math.round(height),
+			color,
+			content,
+			type: type as 'sticky' | 'image' | 'text' | 'code',
+			z
+		});
 	}
-]);
+
+	// Add a few strategic overlapping nodes to showcase obstruction detection
+	boxes.push(
+		{
+			id: 26,
+			x: 0,
+			y: 0,
+			width: 220,
+			height: 180,
+			color: '#FF6B6B',
+			content: 'Center Focus Node',
+			type: 'sticky',
+			z: 0 // Middle layer
+		},
+		{
+			id: 27,
+			x: 50,
+			y: 30,
+			width: 160,
+			height: 140,
+			color: '#4ECDC4',
+			content: 'Overlapping Front',
+			type: 'image',
+			z: 1 // In front of center node
+		},
+		{
+			id: 28,
+			x: -30,
+			y: 60,
+			width: 180,
+			height: 120,
+			color: '#45B7D1',
+			content: 'Another Overlay',
+			type: 'text',
+			z: 2 // Even further in front
+		}
+	);
+
+	const sortedBoxes = boxes.sort((a, b) => a.z - b.z); // Sort by z-index for proper rendering
+
+	// Log scene composition
+	const depthCounts = new Map<number, number>();
+	sortedBoxes.forEach((box) => {
+		depthCounts.set(box.z, (depthCounts.get(box.z) || 0) + 1);
+	});
+
+	console.log(
+		`🎨 Generated ${sortedBoxes.length} nodes across depths:`,
+		Array.from(depthCounts.entries())
+			.sort((a, b) => a[0] - b[0])
+			.map(([z, count]) => `Z${z >= 0 ? '+' : ''}${z}: ${count}`)
+			.join(', ')
+	);
+
+	// Debug parallax factors for each depth
+	console.log(
+		`🔄 Parallax factors:`,
+		Array.from(depthCounts.keys())
+			.sort((a, b) => a - b)
+			.map((z) => `Z${z >= 0 ? '+' : ''}${z}: ${getParallaxFactor(z).toFixed(2)}x`)
+			.join(', ')
+	);
+
+	return sortedBoxes;
+}
+
+let boxes = $state<AppBoxState[]>(generateRandomBoxes());
 let selectedBoxId = $state<number | null>(null);
 let lastSelectedBoxId = $state<number | null>(null);
 
@@ -503,5 +588,13 @@ export const canvasStore = {
 	// Get boxes sorted by Z-index for rendering order
 	getBoxesByZIndex() {
 		return [...boxes].sort((a, b) => a.z - b.z);
+	},
+
+	// Regenerate the scene with new random nodes
+	regenerateScene() {
+		boxes = generateRandomBoxes();
+		selectedBoxId = null;
+		lastSelectedBoxId = null;
+		console.log(`🎲 Generated ${boxes.length} new nodes across depths -3 to +3`);
 	}
 };

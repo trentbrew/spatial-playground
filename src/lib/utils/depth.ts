@@ -37,13 +37,23 @@ export const getIntrinsicScaleFactor = (z: number): number => {
 /**
  * Calculates a parallax factor for a layer to simulate depth.
  * Layers with z < 0 move slower than the base layer, and layers with z > 0 move faster.
+ * Uses a more gentle curve to prevent extreme parallax at deep depths.
  * @param z - The z-index of the layer.
  * @returns A parallax multiplier.
  */
 export const getParallaxFactor = (z: number): number => {
 	if (z === 0) return 1.0;
-	// These values can be tweaked to change the "feel" of the parallax effect
-	const parallaxScale = z < 0 ? 0.75 : 0.4;
-	const factor = 1.0 + z * parallaxScale;
-	return z < 0 ? Math.max(0.05, factor) : factor; // Prevent reversal for distant objects
+
+	// Use a gentler exponential curve to prevent extreme parallax
+	// This creates a more natural depth feel without pushing nodes too far
+	if (z < 0) {
+		// Background layers: diminishing parallax as we go deeper
+		// Formula: 1.0 - (1 - 0.7^|z|) gives us: Z-1=0.7, Z-2=0.51, Z-3=0.357
+		const factor = 1.0 - (1.0 - Math.pow(0.7, Math.abs(z)));
+		return Math.max(0.3, factor); // Never go below 30% speed
+	} else {
+		// Foreground layers: moderate increase in parallax
+		// Formula: 1.0 + 0.3 * z gives us: Z+1=1.3, Z+2=1.6, Z+3=1.9
+		return 1.0 + 0.3 * z;
+	}
 };

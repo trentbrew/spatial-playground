@@ -12,6 +12,7 @@
 	import ControlsOverlay from './ControlsOverlay.svelte';
 	import TracingIndicator from './TracingIndicator.svelte';
 	import ObstructionIndicator from './ObstructionIndicator.svelte';
+	import SceneStats from './SceneStats.svelte';
 
 	// --- Constants ---
 	const SMOOTHING_FACTOR = 0.4;
@@ -144,6 +145,21 @@
 		// Update element store when element is bound
 		viewportElementStore.set(viewportElement);
 
+		// Global keyboard handler to prevent browser shortcuts
+		const globalKeyHandler = (event: KeyboardEvent) => {
+			if ((event.metaKey || event.ctrlKey) && (event.key === '[' || event.key === ']')) {
+				event.preventDefault();
+				event.stopPropagation();
+				handleKeyDown(event);
+			}
+		};
+
+		document.addEventListener('keydown', globalKeyHandler);
+
+		const cleanup = () => {
+			document.removeEventListener('keydown', globalKeyHandler);
+		};
+
 		// Observe viewport dimensions
 		const resizeObserver = new ResizeObserver((entries) => {
 			if (entries[0]) {
@@ -183,6 +199,7 @@
 		});
 
 		return () => {
+			cleanup(); // Remove global keyboard listener
 			resizeObserver.disconnect();
 			// Ensure animation frame is cancelled on destroy
 			if (animationFrameId) {
@@ -204,15 +221,22 @@
 	// Keyboard event handler for Z-axis management
 	function handleKeyDown(event: KeyboardEvent) {
 		// Check for Cmd+] (move forward in Z) or Cmd+[ (move backward in Z)
-		if ((event.metaKey || event.ctrlKey) && selectedBoxId !== null) {
-			if (event.key === ']') {
+		if (event.metaKey || event.ctrlKey) {
+			if (event.key === ']' || event.key === '[') {
+				// Always prevent default browser behavior for these shortcuts
 				event.preventDefault();
-				canvasStore.moveSelectedForward();
-				console.log(`Moved box ${selectedBoxId} forward in Z-axis`);
-			} else if (event.key === '[') {
-				event.preventDefault();
-				canvasStore.moveSelectedBackward();
-				console.log(`Moved box ${selectedBoxId} backward in Z-axis`);
+				event.stopPropagation();
+
+				// Only execute if we have a selected box
+				if (selectedBoxId !== null) {
+					if (event.key === ']') {
+						canvasStore.moveSelectedForward();
+						console.log(`Moved box ${selectedBoxId} forward in Z-axis`);
+					} else if (event.key === '[') {
+						canvasStore.moveSelectedBackward();
+						console.log(`Moved box ${selectedBoxId} backward in Z-axis`);
+					}
+				}
 			}
 		}
 	}
@@ -286,6 +310,7 @@
 <ControlsOverlay />
 <TracingIndicator />
 <ObstructionIndicator />
+<SceneStats />
 
 <style>
 	.viewport {
