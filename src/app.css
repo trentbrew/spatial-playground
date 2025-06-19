@@ -41,7 +41,7 @@
 [data-theme='dark'] {
 	--handle-height: 20px; /* Define handle height (consistent) */
 	--bg-color: #000000;
-	--bg-canvas-color: #242424; /* Slightly lighter than viewport bg */
+	--bg-canvas-color: #010101; /* Slightly lighter than viewport bg */
 	--text-color: #f0f0f0;
 	--box-border-color: #888;
 	--box-bg-color-default: #3a4a5a; /* Darker blue */
@@ -67,6 +67,7 @@
 
 /* Apply base background and text color */
 body {
+	/* cursor: none !important; */
 	background-color: var(--bg-color);
 	color: var(--text-color);
 	margin: 0;

@@ -703,10 +703,13 @@ export const canvasStore = {
 	restorePreviousZoom() {
 		if (zoomedBoxId === null) return;
 
-		// Use the new unfocus method for better visual feedback
-		this.unfocusNode();
+		console.log(`🔍 Restoring previous zoom: ${zoom.toFixed(2)} → ${prevZoom.toFixed(2)}`);
 
-		// Also restore the previous viewport position
+		// Clear the zoomed state first to prevent recursion
+		zoomedBoxId = null;
+
+		// Restore the previous zoom and viewport position
+		targetZoom = prevZoom;
 		targetOffsetX = prevOffsetX;
 		targetOffsetY = prevOffsetY;
 		animationDuration = FOCUS_TRANSITION_DURATION; // Use the constant
@@ -1012,7 +1015,22 @@ export const canvasStore = {
 	// Unfocus the current node with a slight zoom out for visual feedback
 	unfocusNode() {
 		if (zoomedBoxId === null) return;
-		this.restorePreviousZoom();
+
+		console.log(`🔍 Unfocusing node ${zoomedBoxId}`);
+
+		// Clear the zoomed state and restore previous zoom level
+		const wasZoomedBoxId = zoomedBoxId;
+		zoomedBoxId = null;
+
+		// Restore the previous zoom and viewport position
+		targetZoom = prevZoom;
+		targetOffsetX = prevOffsetX;
+		targetOffsetY = prevOffsetY;
+		animationDuration = FOCUS_TRANSITION_DURATION;
+
+		console.log(
+			`🔍 Unfocused Box ${wasZoomedBoxId}, restoring zoom: ${zoom.toFixed(2)} → ${prevZoom.toFixed(2)}`
+		);
 	},
 
 	// Called when view changes to refresh ghosting if needed
@@ -1090,6 +1108,27 @@ export const canvasStore = {
 	// --- New Actions ---
 	toggleAperture() {
 		apertureEnabled = !apertureEnabled;
+	},
+
+	// Clear all boxes and reset selection state for a blank scene
+	clearScene() {
+		boxes = [];
+		selectedBoxId = null;
+		lastSelectedBoxId = null;
+		draggingBoxId = null;
+		ghostedBoxIds = new Set();
+		boundaryHitBoxId = null;
+		fullscreenBoxId = null;
+		zoomedBoxId = null;
+		// Optionally reset zoom and offsets to defaults
+		zoom = 1;
+		offsetX = 0;
+		offsetY = 0;
+		targetZoom = 1;
+		targetOffsetX = 0;
+		targetOffsetY = 0;
+		// Log for debugging
+		console.log('🧹 Scene cleared: all boxes removed and state reset');
 	}
 };
 

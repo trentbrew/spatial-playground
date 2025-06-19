@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { marked } from 'marked';
+	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import { getTextColorForBackground } from '$lib/utils/colorUtils';
+	import { browser } from '$app/environment';
 
 	// Use $props() rune for component props
 	let {
@@ -13,187 +14,79 @@
 		isFocused
 	}: {
 		id: number;
-		content: string;
+		content: string | { title?: string; body?: string };
 		color: string;
 		isSelected: boolean;
 		isFullscreen: boolean;
 		isFocused: boolean;
 	} = $props();
 
-	// State for markdown editor
-	let isPreviewMode = $state(false);
-	let textareaElement = $state<HTMLTextAreaElement>();
-	let renderedMarkdown = $state('');
+	// Handle content that might be a string or an object
+	let textContent = $state('');
+	let useQuillEditor = $state(false);
+	let QuillEditor = $state<any>(null);
+
+	$effect(() => {
+		if (typeof content === 'string') {
+			textContent = content;
+		} else if (content && typeof content === 'object') {
+			textContent = content.body || content.title || '';
+		} else {
+			textContent = '';
+		}
+	});
 
 	// Use $derived rune to calculate text color based on background
-	const contrastingTextColor = $derived(getTextColorForBackground(color));
+	// const contrastingTextColor = $derived(getTextColorForBackground(color));
+	const contrastingTextColor = '#181818';
 
-	// Configure marked for safety and features
-	onMount(() => {
+	// Handle content changes from Quill editor
+	function handleContentChange(newContent: { delta?: any; text: string }) {
+		// Update the canvas store with the new content
+		canvasStore.updateBox(id, { content: newContent.text });
+	}
+
+	// Handle textarea content changes (fallback)
+	function handleTextareaChange(event: Event) {
+		const target = event.target as HTMLTextAreaElement;
+		canvasStore.updateBox(id, { content: target.value });
+	}
+
+	// Try to load Quill editor
+	onMount(async () => {
+		if (!browser) return;
+
 		try {
-			marked.setOptions({
-				breaks: true,
-				gfm: true
-			});
-			// Only update after marked is configured
-			updateRenderedMarkdown();
+			// Dynamically import the QuillEditor component
+			const module = await import('../QuillEditor.svelte');
+			QuillEditor = module.default;
+			useQuillEditor = true;
+			console.log('QuillEditor loaded successfully');
 		} catch (error) {
-			console.warn('Failed to configure marked:', error);
-			renderedMarkdown = content || '';
+			console.warn('Failed to load QuillEditor, using fallback textarea:', error);
+			useQuillEditor = false;
 		}
 	});
-
-	// Update rendered markdown when content changes
-	$effect(() => {
-		updateRenderedMarkdown();
-	});
-
-	function updateRenderedMarkdown() {
-		try {
-			// Ensure content is a string and not null/undefined
-			const safeContent = content || '';
-
-			if (safeContent.trim() === '') {
-				renderedMarkdown = '';
-				return;
-			}
-
-			const parsed = marked.parse(safeContent);
-			// Ensure the result is a string and not a Promise
-			renderedMarkdown = typeof parsed === 'string' ? parsed : String(parsed);
-		} catch (error) {
-			console.warn('Markdown parsing error:', error);
-			// Fallback to escaped content to prevent HTML injection
-			renderedMarkdown = (content || '')
-				.replace(/&/g, '&amp;')
-				.replace(/</g, '&lt;')
-				.replace(/>/g, '&gt;');
-		}
-	}
-
-	function handleKeyDown(event: KeyboardEvent) {
-		const textarea = event.target as HTMLTextAreaElement;
-		const { selectionStart, selectionEnd } = textarea;
-
-		// Toggle preview with Ctrl/Cmd + P
-		if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
-			event.preventDefault();
-			isPreviewMode = !isPreviewMode;
-			return;
-		}
-
-		// Tab for indentation
-		if (event.key === 'Tab') {
-			event.preventDefault();
-			const start = selectionStart;
-			const end = selectionEnd;
-
-			if (event.shiftKey) {
-				// Unindent
-				const lineStart = content.lastIndexOf('\n', start - 1) + 1;
-				if (content.substring(lineStart, lineStart + 2) === '  ') {
-					content = content.substring(0, lineStart) + content.substring(lineStart + 2);
-					textarea.setSelectionRange(start - 2, end - 2);
-				}
-			} else {
-				// Indent
-				content = content.substring(0, start) + '  ' + content.substring(end);
-				textarea.setSelectionRange(start + 2, end + 2);
-			}
-		}
-
-		// Auto-complete markdown syntax
-		if (event.key === 'Enter') {
-			const lineStart = content.lastIndexOf('\n', selectionStart - 1) + 1;
-			const currentLine = content.substring(lineStart, selectionStart);
-
-			// Continue lists
-			const listMatch = currentLine.match(/^(\s*)([-*+]|\d+\.)\s/);
-			if (listMatch) {
-				event.preventDefault();
-				const indent = listMatch[1];
-				const bullet = listMatch[2];
-				const newBullet = bullet.match(/\d+/) ? `${parseInt(bullet) + 1}.` : bullet;
-				const insertion = `\n${indent}${newBullet} `;
-				content =
-					content.substring(0, selectionStart) + insertion + content.substring(selectionEnd);
-				textarea.setSelectionRange(
-					selectionStart + insertion.length,
-					selectionStart + insertion.length
-				);
-			}
-		}
-
-		// Auto-detect when switching to preview mode
-		// If user types markdown and pauses, briefly show preview
-		if (
-			content.includes('#') ||
-			content.includes('**') ||
-			content.includes('*') ||
-			content.includes('-')
-		) {
-			// Auto-preview logic could go here if desired
-		}
-	}
-
-	// Auto-toggle preview for better UX
-	function handleInput() {
-		// If we have markdown syntax and user stops typing, show preview briefly
-		// This creates a nice "live preview" effect
-	}
-
-	function togglePreview() {
-		isPreviewMode = !isPreviewMode;
-		if (!isPreviewMode) {
-			setTimeout(() => textareaElement?.focus(), 0);
-		}
-	}
 </script>
 
 <div id={String(id)} class="sticky-note-content" style="background-color: {color};">
-	<!-- Content Area -->
-	<div class="content-area">
-		{#if isPreviewMode}
-			<!-- Markdown Preview -->
-			<div
-				class="markdown-preview"
-				style="color: {contrastingTextColor};"
-				onclick={togglePreview}
-				onkeydown={(e) => e.key === 'Enter' && togglePreview()}
-				role="button"
-				tabindex="0"
-				title="Click to edit"
-				data-cursor={isFocused ? 'ignore' : undefined}
-			>
-				{#if renderedMarkdown && renderedMarkdown.trim() !== ''}
-					{@html renderedMarkdown}
-				{:else}
-					<span class="empty-placeholder">Click to edit...</span>
-				{/if}
-			</div>
+	<div class="editor-container" style="color: {contrastingTextColor};">
+		{#if useQuillEditor && QuillEditor}
+			<!-- Use Quill Editor when available -->
+			<QuillEditor
+				content={textContent}
+				onContentChange={handleContentChange}
+				placeholder="Start writing..."
+				{isFocused}
+			/>
 		{:else}
-			<!-- Markdown Editor -->
+			<!-- Fallback to simple textarea -->
 			<textarea
-				bind:this={textareaElement}
-				bind:value={content}
-				onkeydown={handleKeyDown}
-				oninput={handleInput}
-				onblur={() => {
-					// Auto-preview when losing focus if content has markdown
-					if (
-						content.includes('#') ||
-						content.includes('**') ||
-						content.includes('*') ||
-						content.includes('-')
-					) {
-						setTimeout(() => (isPreviewMode = true), 100);
-					}
-				}}
-				onfocus={() => (isPreviewMode = false)}
-				placeholder="Write something..."
+				bind:value={textContent}
+				oninput={handleTextareaChange}
+				placeholder="Start writing..."
+				class="fallback-textarea"
 				style="color: {contrastingTextColor};"
-				class="markdown-editor"
-				data-cursor={isFocused ? 'ignore' : undefined}
 			></textarea>
 		{/if}
 	</div>
@@ -203,125 +96,78 @@
 	.sticky-note-content {
 		width: 100%;
 		height: 100%;
-		padding: 8px;
+		padding: 12px;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
+		overflow: visible;
 		border-radius: 6px;
 		position: relative;
 	}
 
-	.content-area {
+	.editor-container {
 		flex: 1;
 		overflow: hidden;
 		display: flex;
 		flex-direction: column;
+		min-height: 0; /* Important for flex child to shrink */
 	}
 
-	.markdown-editor {
+	.fallback-textarea {
 		flex: 1;
-		border: none !important;
-		outline: none !important;
-		box-shadow: none !important;
+		border: none;
+		outline: none;
 		background: transparent;
 		resize: none;
 		font-family: inherit;
-		font-size: 12px;
-		line-height: 1.4;
-		padding: 0;
+		font-size: 13px;
+		line-height: 1.5;
+		padding: 8px;
+		box-sizing: border-box;
+		color: inherit;
 		width: 100%;
 		height: 100%;
-		box-sizing: border-box;
-		/* Remove any focus/active highlights */
-		caret-color: auto;
 	}
 
-	.markdown-editor::placeholder {
+	.fallback-textarea::placeholder {
 		color: inherit;
-		opacity: 0.5; /* Ensures full opacity for placeholder text */
-	}
-
-	.markdown-preview {
-		flex: 1;
-		padding: 0;
-		overflow-y: auto;
-		font-size: 12px;
-		line-height: 1.4;
-		cursor: pointer;
-	}
-
-	/* Markdown Preview Styles */
-	.markdown-preview :global(h1) {
-		font-size: 16px;
-		margin: 8px 0 4px 0;
-		font-weight: bold;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-		padding-bottom: 2px;
-	}
-	.markdown-preview :global(h2) {
-		font-size: 14px;
-		margin: 6px 0 3px 0;
-		font-weight: bold;
-	}
-	.markdown-preview :global(h3) {
-		font-size: 13px;
-		margin: 4px 0 2px 0;
-		font-weight: bold;
-	}
-	.markdown-preview :global(p) {
-		margin: 4px 0;
-	}
-	.markdown-preview :global(ul),
-	.markdown-preview :global(ol) {
-		margin: 4px 0;
-		padding-left: 16px;
-	}
-	.markdown-preview :global(li) {
-		margin: 2px 0;
-	}
-	.markdown-preview :global(code) {
-		background: rgba(0, 0, 0, 0.15);
-		padding: 1px 4px;
-		border-radius: 3px;
-		font-size: 11px;
-		font-family: 'SF Mono', Monaco, monospace;
-	}
-	.markdown-preview :global(pre) {
-		background: rgba(0, 0, 0, 0.15);
-		padding: 8px;
-		border-radius: 4px;
-		overflow-x: auto;
-		font-size: 11px;
-		margin: 6px 0;
-		border-left: 3px solid rgba(255, 255, 255, 0.3);
-	}
-	.markdown-preview :global(blockquote) {
-		border-left: 3px solid rgba(255, 255, 255, 0.4);
-		padding-left: 8px;
-		margin: 6px 0;
-		font-style: italic;
-		opacity: 0.9;
-	}
-	.markdown-preview :global(a) {
-		text-decoration: underline;
-		opacity: 0.8;
-	}
-	.markdown-preview :global(strong) {
-		font-weight: bold;
-	}
-	.markdown-preview :global(em) {
+		opacity: 0.6;
 		font-style: italic;
 	}
-	.markdown-preview :global(hr) {
+
+	/* Override Quill styles to match sticky note theme */
+	:global(.sticky-note-content .ql-editor) {
+		color: inherit;
+		background: transparent;
 		border: none;
-		border-top: 1px solid rgba(255, 255, 255, 0.2);
-		margin: 8px 0;
+		padding: 8px;
+		font-size: 13px;
+		line-height: 1.5;
+		font-family: inherit;
 	}
 
-	/* Empty state styling */
-	.empty-placeholder {
-		opacity: 0.5;
+	:global(.sticky-note-content .ql-editor.ql-blank::before) {
+		color: inherit;
+		opacity: 0.6;
 		font-style: italic;
+	}
+
+	:global(.sticky-note-content .ql-container) {
+		border: none;
+		background: transparent;
+		font-family: inherit;
+	}
+
+	:global(.sticky-note-content .ql-toolbar) {
+		background: rgba(255, 255, 255, 0.95);
+		border: 1px solid rgba(0, 0, 0, 0.1);
+		border-radius: 6px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+		backdrop-filter: blur(8px);
+	}
+
+	/* Ensure toolbar appears above other elements */
+	:global(.sticky-note-content .ql-toolbar.ql-snow) {
+		z-index: 1001;
 	}
 </style>

@@ -21,3 +21,6 @@ export const DEFAULT_NODE_DIMENSIONS = {
 	embed: { width: 800, height: 600 },
 	note: { width: 200, height: 150 }
 } as const;
+
+export const MAX_NODE_WIDTH = 360;
+export const MAX_NODE_HEIGHT = 360;

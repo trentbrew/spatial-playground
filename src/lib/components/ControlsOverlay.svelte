@@ -70,8 +70,8 @@
 		const newId = Math.max(...boxes.map((b) => b.id), 0) + 1;
 		const color = colors[Math.floor(Math.random() * colors.length)];
 		const type = nodeTypes[Math.floor(Math.random() * nodeTypes.length)];
-		const width = 150 + Math.random() * 100;
-		const height = 120 + Math.random() * 80;
+		const width = Math.min(150 + Math.random() * 100, MAX_NODE_WIDTH);
+		const height = Math.min(120 + Math.random() * 80, MAX_NODE_HEIGHT);
 		const z = Math.floor(Math.random() * 4) - 3; // Z from -3 to 0
 
 		const newBox = {
@@ -143,6 +143,14 @@
 		title="Generate new random scene"
 	>
 		🎲 New Scene
+	</button>
+	<button
+		class="control-button clear-scene-button"
+		data-cursor="button"
+		onclick={() => canvasStore.clearScene()}
+		title="Clear all nodes and start with a blank scene"
+	>
+		🧹 Clear Scene
 	</button>
 	<button
 		class="control-button aperture-toggle"

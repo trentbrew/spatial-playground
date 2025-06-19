@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
-	import { boxResizing } from '$lib/interactions/boxResizing';
+	import { boxResizing } from '$lib/interactions/boxResizing.svelte';
 	import { nodeComponentMap } from '$lib/components/nodeComponentMap';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 	import { FOCUS_TRANSITION_DURATION } from '$lib/constants';
@@ -9,6 +9,33 @@
 	import { getFocusZoomForZ } from '$lib/utils/depth';
 	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
 	import type { AppBoxState } from '$lib/canvasState';
+
+	// Icons
+	import {
+		X,
+		File,
+		Clapperboard,
+		AudioLines,
+		Table,
+		StickyNote,
+		Globe,
+		Image,
+		Code
+	} from 'lucide-svelte';
+
+	// Icon mapping for node types
+	const nodeTypeIcons: Record<string, any> = {
+		sticky: StickyNote,
+		image: Image,
+		embed: Globe,
+		file: File,
+		text: StickyNote,
+		audio: AudioLines,
+		video: Clapperboard,
+		code: Code,
+		table: Table,
+		default: File
+	};
 
 	// Use $props() rune for component props
 	let { box }: { box: AppBoxState } = $props();
@@ -55,6 +82,14 @@
 	// Component references for actions
 	let containerElement: HTMLDivElement;
 	let dragHandleElement: HTMLDivElement;
+
+	// Compute node title (fallback to type if no content)
+	const nodeTitle = box.content?.split('\n')[0]?.slice(0, 32) || 'Untitled';
+	const nodeIcon = nodeTypeIcons[box.type] || nodeTypeIcons.default;
+
+	// 3D transform for z layer
+	const depthFactor = 60; // px per z layer
+	const zTransform = `perspective(800px) translateZ(${box.z * depthFactor}px) rotateX(${box.z * -2}deg) rotateY(${box.z * 1.5}deg)`;
 
 	function handleClick(event: MouseEvent) {
 		console.log(`[NodeContainer] Clicked box id: ${box.id}`, box);
@@ -177,7 +212,6 @@
 
 <div
 	class="box"
-	role="button"
 	tabindex="0"
 	onclick={handleClick}
 	ondblclick={handleDoubleClick}
@@ -193,8 +227,8 @@
 	class:non-clickable={!isClickable && !isGhosted}
 	style:left="{box.x}px"
 	style:top="{box.y}px"
-	style:width="{box.width}px"
-	style:height="{box.height}px"
+	style:width="{Math.max(box.width, 360)}px"
+	style:height="{Math.max(box.height, 360)}px"
 	style:--z-brightness={box.z * 0.05}
 	style:--focus-transition-duration="{FOCUS_TRANSITION_DURATION}ms"
 	style:z-index={fullscreenBoxId === box.id
@@ -211,28 +245,49 @@
 			: !isClickable
 				? 'none'
 				: 'auto'}
+	style:transform="{zTransform} scale(calc(1 + var(--z-brightness, 0) * 0.5))"
 >
-	<!-- Drag handle placeholder -->
-	<!-- <div
-		class="drag-handle"
-		role="button"
-		tabindex="0"
-		title="Drag to move"
-		data-cursor="grab"
-		onclick={(e) => e.stopPropagation()}
-		ondblclick={handleDragHandleDoubleClick}
-		onkeydown={handleDragHandleKeyDown}
-	>
-		<button
-			class="close-button"
-			data-cursor="close-button"
-			onclick={handleClose}
-			title="Close"
-			aria-label="Close node"
+	<!-- Minimalist Node Toolbar/Header -->
+	<div class="node-toolbar">
+		{@render nodeIcon({ class: 'node-icon' })}
+		<input
+			type="text"
+			class="node-title-input"
+			placeholder="Untitled Node"
+			style="
+				background: none;
+				border: none;
+				outline: none;
+				color: #eaeaea;
+				font-size: 12px;
+				font-weight: 400;
+				padding: 2px 6px;
+				margin: 0;
+				border-radius: 4px;
+				width: auto;
+				flex: 1 1 auto;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				opacity: 1;
+			"
+			style:opacity={nodeTitle ? 1 : 0.5}
+			value={nodeTitle || ''}
+			oninput={(e) => {
+				const input = e.target as HTMLInputElement;
+				let newContent: any = {};
+				if (box.content && typeof box.content === 'object' && !Array.isArray(box.content)) {
+					newContent = Object.assign({}, box.content, { title: input.value });
+				} else {
+					newContent = { title: input.value, body: box.content };
+				}
+				canvasStore.updateBox(box.id, { content: newContent });
+			}}
+		/>
+		<button class="node-close" title="Close" aria-label="Delete node" onclick={handleClose}
+			><X /></button
 		>
-			×
-		</button>
-	</div> -->
+	</div>
 
 	<!-- Node-specific content -->
 	<Component
@@ -257,18 +312,20 @@
 			title="Resize"
 			aria-label="Resize node"
 		>
+			<!-- Resize handle icon -->
 			<svg
 				width="16"
 				height="17"
 				viewBox="0 0 16 17"
-				fill="none"
 				xmlns="http://www.w3.org/2000/svg"
+				style="display: block;"
 			>
 				<path
 					d="M2 14.8491C6.5 14.8491 14.7818 12.5626 13.9391 2"
 					stroke="white"
 					stroke-width="3"
 					stroke-linecap="round"
+					fill="none"
 				/>
 			</svg>
 		</div>
@@ -304,6 +361,8 @@
 			0 0 0 1px var(--box-border-color),
 			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
 				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.05));
+		min-width: 360px;
+		min-height: 360px;
 	}
 	.drag-handle {
 		width: 100%;
@@ -325,14 +384,14 @@
 		cursor: pointer;
 		padding: 2px;
 		width: 16px;
-		transform: translateY(-2px);
-		height: 16px;
+		transform: translate(0px, -2px);
+		height: 24px;
 		aspect-ratio: 1/1;
 		border-radius: 4px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		opacity: 0.6;
+		opacity: 0.8;
 		transition:
 			opacity 0.2s ease,
 			background-color 0.2s ease;
@@ -347,45 +406,38 @@
 	/* Single corner resize handle (bottom-right) - custom SVG style */
 	.resize-handle.handle-se {
 		position: absolute;
-		bottom: -18px;
-		right: -20px;
+		bottom: -24px;
+		right: -24px;
 		cursor: nwse-resize;
-		width: 24px;
-		height: 24px;
-		background: rgba(40, 40, 40, 0);
-		border: none;
-		border-radius: 8px;
-		/* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); */
+		width: 32px;
+		height: 36px;
+		/* background: rgba(60, 60, 60, 0.9); */
+		/* border: 1px solid rgba(120, 120, 120, 0.8); */
+		border-radius: 6px;
+		/* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); */
 		z-index: 15;
-		opacity: 0.5;
+		opacity: 0.9;
 		pointer-events: auto;
 		display: flex;
 		align-items: center;
-		transition: 300ms !important;
 		justify-content: center;
+		transition: all 0.2s ease;
 		padding: 4px;
 	}
 
 	.resize-handle.handle-se:hover {
 		opacity: 1;
-		bottom: -22px;
-		right: -24px;
+		background: rgba(80, 80, 80, 0);
+		transform: scale(1.3);
+		/* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); */
 	}
 
 	.resize-handle.handle-se svg {
 		display: block;
-		/* transform: translate(16px, 14px); */
 		width: 16px;
-		height: 24px;
+		height: 17px;
 		pointer-events: none;
 	}
-
-	/* Hover effect for custom SVG handle */
-	/* .resize-handle.handle-se:hover {
-		opacity: 1;
-		background-color: rgba(60, 60, 60, 0.95);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	} */
 	.box.selected {
 		border: 2px solid var(--box-selected-border-color);
 		/* Enhanced selected state that preserves depth shadow */
@@ -568,5 +620,94 @@
 		100% {
 			transform: scale(calc(1 + var(--z-brightness, 0) * 0.5)) translateZ(0);
 		}
+	}
+
+	/* Minimalist Node Toolbar/Header Styles */
+	.node-toolbar {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 38px;
+		background: rgba(24, 24, 24, 0);
+		position: absolute;
+		top: -48px;
+		left: 0;
+		right: 0;
+		border-radius: 10px 10px 0 0;
+		padding: 0 8px 0 8px;
+		z-index: 20;
+		user-select: none;
+		font-size: 17px;
+		font-weight: 500;
+		color: #eaeaea;
+		box-sizing: border-box;
+		pointer-events: auto;
+		border-bottom: 1.5px solid rgba(255, 255, 255, 0.08);
+	}
+	.node-icon {
+		font-size: 22px;
+		margin-right: 8px;
+		margin-left: 2px;
+		opacity: 0.92;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+	}
+	.node-title {
+		flex: 1 1 auto;
+		font-size: 12px;
+		font-weight: 400;
+		color: #eaeaea;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		opacity: 0.97;
+		display: flex;
+		align-items: center;
+		letter-spacing: 0.01em;
+	}
+
+	.node-title-input {
+		font-size: 12px;
+		outline: none;
+		border: none;
+		background: none;
+		color: #eaeaea;
+		opacity: 1;
+		flex: 1 1 auto;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.node-title-input::placeholder {
+		color: #eaeaea;
+		opacity: 0.5;
+	}
+	.node-close {
+		background: none;
+		border: none;
+		color: #eaeaea;
+		font-size: 24px;
+		cursor: pointer;
+		opacity: 0.7;
+		margin-left: 12px;
+		border-radius: 4px;
+		padding: 0 8px;
+		transition:
+			background 0.15s,
+			opacity 0.15s;
+		align-self: center;
+		display: flex;
+		align-items: center;
+		height: 42px;
+	}
+	.node-close:hover {
+		background: rgba(255, 0, 0, 0.13);
+		color: cyan;
 	}
 </style>

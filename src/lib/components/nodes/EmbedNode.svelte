@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
+	import { Globe } from '@lucide/svelte';
 
 	// Use $props() rune for component props
 	let {
@@ -80,6 +81,9 @@
 		<!-- Initial URL input state -->
 		<div class="url-input-container">
 			<div class="input-prompt">
+				<!-- <div class="flex items-center justify-center p-8">
+					<Globe class="h-12 w-12" />
+				</div> -->
 				<h3>Add Web Embed</h3>
 				<p>Enter a URL to embed content</p>
 			</div>
@@ -98,7 +102,7 @@
 					→
 				</button>
 			</div>
-			<div class="hint">Press Enter to load</div>
+			<!-- <div class="hint">Press Enter to load</div> -->
 		</div>
 	{:else if hasValidUrl}
 		<!-- Loaded embed with location bar -->

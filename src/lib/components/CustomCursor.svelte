@@ -359,7 +359,7 @@
 				case 'button':
 				case 'close-button':
 					cursorElement.style.backgroundColor = 'rgba(255,255,255,0.9)';
-					cursorElement.style.border = '1px solid rgba(255,255,255,0.5)';
+					cursorElement.style.border = '1px solid rgba(255,0,0,0.5)';
 					cursorElement.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
 					cursorElement.style.zIndex = '999999';
 					break;

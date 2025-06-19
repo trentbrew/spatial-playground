@@ -6,8 +6,8 @@
 	import type { AppBoxState } from '$lib/canvasState';
 	import BackgroundCanvas from '$lib/components/BackgroundCanvas.svelte';
 	import NodesLayer from '$lib/components/NodesLayer.svelte';
-	import { panning } from '$lib/interactions/panning';
-	import { zooming } from '$lib/interactions/zooming';
+	import { panning } from '$lib/interactions/panning.svelte.ts';
+	import { zooming } from '$lib/interactions/zooming.svelte.ts';
 	import { setViewportContext } from '$lib/contexts/viewportContext';
 	import ControlsOverlay from './ControlsOverlay.svelte';
 	import TracingIndicator from './TracingIndicator.svelte';
@@ -700,12 +700,11 @@
 	<NodesLayer />
 </div>
 
-<ControlsOverlay />
+<!-- <SceneStats /> -->
+<!-- <ControlsOverlay /> -->
 <TracingIndicator />
 <ObstructionIndicator />
-<SceneStats />
 
-<!-- Context Menu -->
 <ContextMenu
 	visible={contextMenuStore.visible}
 	x={contextMenuStore.x}
