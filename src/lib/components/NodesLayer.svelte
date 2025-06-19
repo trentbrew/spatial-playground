@@ -4,7 +4,11 @@
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import NodeContainer from './NodeContainer.svelte';
 	import { getIntrinsicScaleFactor, getParallaxFactor } from '$lib/utils/depth';
-	import { FOCAL_PLANE_TARGET_SCALE, DOF_SHARPNESS_FACTOR } from '$lib/constants';
+	import {
+		FOCAL_PLANE_TARGET_SCALE,
+		DOF_FOCUSED_SHARPNESS_FACTOR,
+		DOF_EXPLORATION_SHARPNESS_FACTOR
+	} from '$lib/constants';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 
 	// --- Reactive State ---
@@ -13,6 +17,8 @@
 	const offsetY = $derived(canvasStore.offsetY);
 	const boxes = $derived(canvasStore.boxes);
 	const draggingBoxId = $derived(canvasStore.draggingBoxId);
+	const zoomedBoxId = $derived(canvasStore.zoomedBoxId);
+	const apertureEnabled = $derived(canvasStore.apertureEnabled);
 
 	// --- Viewport dimensions ---
 	let viewportWidth = $state(0);
@@ -56,10 +62,21 @@
 		// Calculate how far this layer's effective scale is from the ideal focal plane.
 		const focusDelta = Math.abs(FOCAL_PLANE_TARGET_SCALE - totalEffectiveScale);
 
+		// Dynamic depth of field - more dramatic when a node is focused
+		const isFocused = zoomedBoxId !== null;
+		const dofSharpnessFactor = isFocused
+			? DOF_FOCUSED_SHARPNESS_FACTOR
+			: DOF_EXPLORATION_SHARPNESS_FACTOR;
+		const maxBlur = isFocused ? 16 : 8; // Higher blur when focused for dramatic effect
+
 		// Blur and brightness are functions of this focus delta.
-		// Increased blur cap and more dramatic brightness drop-off
-		const blurAmount = Math.min(16, focusDelta * DOF_SHARPNESS_FACTOR);
+		let blurAmount = Math.min(maxBlur, focusDelta * dofSharpnessFactor);
 		const brightness = Math.max(0.5, 1.0 - focusDelta * 0.6);
+
+		// If aperture effect is disabled and we're not in focus mode, disable blur.
+		if (!apertureEnabled && !isFocused) {
+			blurAmount = 0;
+		}
 
 		const filters = [];
 		if (blurAmount > 0.05) filters.push(`blur(${blurAmount}px)`);

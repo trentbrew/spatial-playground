@@ -12,6 +12,7 @@
 	const currentZoom = $derived(canvasStore.zoom);
 	const currentOffsetX = $derived(canvasStore.offsetX);
 	const currentOffsetY = $derived(canvasStore.offsetY);
+	const apertureEnabled = $derived(canvasStore.apertureEnabled);
 
 	// Input values, synced one-way from selected box
 	let debugXInput = $state('');
@@ -143,6 +144,14 @@
 	>
 		🎲 New Scene
 	</button>
+	<button
+		class="control-button aperture-toggle"
+		data-cursor="button"
+		onclick={() => canvasStore.toggleAperture()}
+		title={apertureEnabled ? 'Disable Aperture Effect' : 'Enable Aperture Effect'}
+	>
+		{apertureEnabled ? '✨' : '➖'} Aperture
+	</button>
 	<ThemeToggle />
 
 	<!-- Zoom Controls -->
@@ -230,7 +239,6 @@
 		right: 0;
 		display: flex;
 		justify-content: center;
-		border: 1px solid var(--box-border-color);
 		margin: 0 20px;
 		z-index: 100;
 		display: flex;
@@ -403,5 +411,14 @@
 	.shortcut {
 		font-size: 10px;
 		opacity: 0.8;
+	}
+
+	.aperture-toggle {
+		background-color: var(--control-button-bg);
+		transition: background-color 0.2s;
+	}
+
+	.aperture-toggle:hover {
+		background-color: var(--control-button-hover-bg);
 	}
 </style>

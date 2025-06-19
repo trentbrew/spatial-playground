@@ -15,6 +15,7 @@
 	import SceneStats from './SceneStats.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
+	import { FOCUS_TRANSITION_DURATION, DEFAULT_NODE_DIMENSIONS } from '$lib/constants';
 	// Lucide icons - ignore TS type errors via global declaration
 	// @ts-ignore
 	import {
@@ -248,6 +249,11 @@
 			!targetElement.closest('.resize-handle') &&
 			!targetElement.closest('.controls-overlay')
 		) {
+			// If a node is currently focused, unfocus it with zoom out feedback
+			if (zoomedBoxId !== null) {
+				canvasStore.unfocusNode();
+			}
+
 			// Deselect the current box, no dimensions needed for deselect
 			canvasStore.selectBox(null);
 		}
@@ -395,12 +401,17 @@
 	}
 
 	function createNewNode(type: string, worldX: number, worldY: number) {
+		// Get dimensions for this node type, fallback to sticky dimensions
+		const dimensions =
+			DEFAULT_NODE_DIMENSIONS[type as keyof typeof DEFAULT_NODE_DIMENSIONS] ||
+			DEFAULT_NODE_DIMENSIONS.sticky;
+
 		const newBox = {
 			id: Date.now(),
-			x: worldX - 100, // Center the 200px wide box on click point
-			y: worldY - 75, // Center the 150px tall box on click point
-			width: 200,
-			height: 150,
+			x: worldX - dimensions.width / 2, // Center the box on click point
+			y: worldY - dimensions.height / 2, // Center the box on click point
+			width: dimensions.width,
+			height: dimensions.height,
 			z: 0, // Start at focus plane
 			content: getDefaultContent(type),
 			color: getRandomColor(),
@@ -425,7 +436,7 @@
 			case 'image':
 				return 'Image placeholder';
 			case 'embed':
-				return 'https://example.com';
+				return ''; // Start with empty content to show input prompt
 			default:
 				return 'New content';
 		}
@@ -467,6 +478,14 @@
 
 	// Keyboard event handler for Z-axis management
 	function handleKeyDown(event: KeyboardEvent) {
+		// Handle Escape key to unfocus nodes
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			canvasStore.unfocusNode();
+			return;
+		}
+
 		// Check for Cmd+] (move forward in Z) or Cmd+[ (move backward in Z)
 		if (event.metaKey || event.ctrlKey) {
 			if (event.key === ']' || event.key === '[') {
@@ -575,10 +594,24 @@
 	async function createImageNodeFromDataUrl(dataUrl: string, worldX: number, worldY: number) {
 		const { width: imgW, height: imgH } = await loadImageDimensions(dataUrl);
 
+		// Calculate the aspect ratio
+		const aspectRatio = imgW / imgH;
+
+		// Set maximum dimensions
 		const MAX_DIM = 400;
-		const scale = Math.min(1, MAX_DIM / Math.max(imgW, imgH));
-		const boxWidth = Math.round(imgW * scale);
-		const boxHeight = Math.round(imgH * scale);
+
+		// Calculate dimensions that maintain aspect ratio and fit within MAX_DIM
+		let boxWidth, boxHeight;
+
+		if (aspectRatio > 1) {
+			// Landscape: width is the limiting factor
+			boxWidth = Math.min(imgW, MAX_DIM);
+			boxHeight = Math.round(boxWidth / aspectRatio);
+		} else {
+			// Portrait or square: height is the limiting factor
+			boxHeight = Math.min(imgH, MAX_DIM);
+			boxWidth = Math.round(boxHeight * aspectRatio);
+		}
 
 		const newBox = {
 			id: Date.now(),

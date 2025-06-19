@@ -6,6 +6,7 @@ import {
 } from '$lib/constants';
 import { getIntrinsicScaleFactor, getFocusZoomForZ, getParallaxFactor } from '$lib/utils/depth';
 import { detectObstruction } from '$lib/utils/obstruction';
+import { writable } from 'svelte/store';
 
 // --- Constants ---
 const ZOOM_PADDING_FACTOR = 0.5; // Zoom to 50% of viewport size
@@ -39,6 +40,9 @@ let transitionSourceZoom = $state(1);
 let transitionSourceOffsetX = $state(0);
 let transitionSourceOffsetY = $state(0);
 let animationDuration = $state(0); // Add animation duration state
+
+// Interaction state
+let apertureEnabled = $state(true);
 
 // Helper function to check if two boxes overlap (with padding)
 function boxesOverlap(
@@ -247,7 +251,6 @@ function generateRandomBoxes(): AppBoxState[] {
 	console.log(
 		`🎨 Generated ${sortedBoxes.length} nodes across depths (Z-3 to Z0):`,
 		Array.from(depthCounts.entries())
-			.sort((a, b) => a[0] - b[0])
 			.map(([z, count]) => `Z${z}: ${count}`)
 			.join(', ')
 	);
@@ -290,7 +293,7 @@ function generateRandomBoxes(): AppBoxState[] {
 	return sortedBoxes;
 }
 
-let boxes = $state<AppBoxState[]>(generateRandomBoxes());
+let boxes = $state(generateRandomBoxes());
 let selectedBoxId = $state<number | null>(null);
 let lastSelectedBoxId = $state<number | null>(null);
 let draggingBoxId = $state<number | null>(null);
@@ -365,6 +368,9 @@ export const canvasStore = {
 	},
 	get animationDuration() {
 		return animationDuration;
+	},
+	get apertureEnabled() {
+		return apertureEnabled;
 	},
 	get boxes() {
 		return boxes;
@@ -697,10 +703,12 @@ export const canvasStore = {
 	restorePreviousZoom() {
 		if (zoomedBoxId === null) return;
 
-		targetZoom = prevZoom;
+		// Use the new unfocus method for better visual feedback
+		this.unfocusNode();
+
+		// Also restore the previous viewport position
 		targetOffsetX = prevOffsetX;
 		targetOffsetY = prevOffsetY;
-		zoomedBoxId = null; // Clear the zoomed state
 		animationDuration = FOCUS_TRANSITION_DURATION; // Use the constant
 	},
 
@@ -739,9 +747,12 @@ export const canvasStore = {
 			transitionSourceOffsetX,
 			transitionSourceOffsetY,
 			animationDuration,
+			apertureEnabled,
 			boxes,
 			selectedBoxId,
-			lastSelectedBoxId
+			lastSelectedBoxId,
+			draggingBoxId,
+			ghostedBoxIds
 		};
 	},
 
@@ -964,14 +975,51 @@ export const canvasStore = {
 	// Set zoom level directly (for slider)
 	setZoom(newZoom: number) {
 		const clampedZoom = Math.max(0.1, Math.min(10, newZoom)); // Clamp between 0.1x and 10x
+
+		// Check if we should auto-unfocus when zooming away from a focused node
+		if (zoomedBoxId !== null) {
+			const focusedBox = boxes.find((b) => b.id === zoomedBoxId);
+			if (focusedBox) {
+				const expectedFocusZoom = getFocusZoomForZ(focusedBox.z);
+				const zoomThreshold = expectedFocusZoom * 0.8; // 80% of expected focus zoom
+
+				// If user zooms significantly away from focus zoom, treat as unfocus (like clicking outside)
+				if (clampedZoom < zoomThreshold) {
+					console.log(
+						`🔍 Auto-unfocusing Box ${zoomedBoxId} - zoom ${clampedZoom.toFixed(2)} below threshold ${zoomThreshold.toFixed(2)}`
+					);
+
+					// Clear the focused state without additional zoom changes to avoid recursion
+					const previousZoomedBoxId = zoomedBoxId;
+					zoomedBoxId = null;
+
+					// Continue with the user's requested zoom level
+					zoom = clampedZoom;
+					targetZoom = clampedZoom;
+					console.log(
+						`🔍 Zoom set to ${clampedZoom.toFixed(2)}x with unfocus of Box ${previousZoomedBoxId}`
+					);
+					return;
+				}
+			}
+		}
+
 		zoom = clampedZoom;
 		targetZoom = clampedZoom;
 		console.log(`🔍 Zoom set to ${clampedZoom.toFixed(2)}x via slider`);
 	},
 
+	// Unfocus the current node with a slight zoom out for visual feedback
+	unfocusNode() {
+		if (zoomedBoxId === null) return;
+		this.restorePreviousZoom();
+	},
+
 	// Called when view changes to refresh ghosting if needed
 	onViewChange(viewportWidth: number, viewportHeight: number) {
-		this.refreshGhosting(viewportWidth, viewportHeight);
+		if (selectedBoxId) {
+			this.checkAndGhostObstructors(selectedBoxId, viewportWidth, viewportHeight);
+		}
 	},
 
 	// Trigger boundary hit effect when node hits screen surface (Z=0)
@@ -998,6 +1046,8 @@ export const canvasStore = {
 
 	// Delete a box from the canvas
 	deleteBox(boxId: number) {
+		const wasFocused = zoomedBoxId === boxId;
+
 		const boxIndex = boxes.findIndex((box) => box.id === boxId);
 		if (boxIndex === -1) return;
 
@@ -1031,5 +1081,60 @@ export const canvasStore = {
 		}
 
 		console.log(`🗑️ Deleted box ${boxId}`);
+
+		if (wasFocused) {
+			this.unfocusNode();
+		}
+	},
+
+	// --- New Actions ---
+	toggleAperture() {
+		apertureEnabled = !apertureEnabled;
 	}
 };
+
+export function toggleAperture() {
+	apertureEnabled = !apertureEnabled;
+}
+
+export function deleteBox(boxId: number) {
+	const wasFocused = zoomedBoxId === boxId;
+
+	const boxIndex = boxes.findIndex((box) => box.id === boxId);
+	if (boxIndex === -1) return;
+
+	// Remove the box from the array
+	boxes.splice(boxIndex, 1);
+
+	// Clear selection if the deleted box was selected
+	if (selectedBoxId === boxId) {
+		selectedBoxId = null;
+	}
+
+	// Clear last selected if it was this box
+	if (lastSelectedBoxId === boxId) {
+		lastSelectedBoxId = null;
+	}
+
+	// Clear dragging state if this box was being dragged
+	if (draggingBoxId === boxId) {
+		draggingBoxId = null;
+	}
+
+	// Remove from ghosted nodes if it was ghosted
+	if (ghostedBoxIds.has(boxId)) {
+		ghostedBoxIds.delete(boxId);
+		ghostedBoxIds = new Set(ghostedBoxIds); // Trigger reactivity
+	}
+
+	// Exit fullscreen if this box was fullscreen
+	if (fullscreenBoxId === boxId) {
+		canvasStore.exitFullscreen();
+	}
+
+	console.log(`🗑️ Deleted box ${boxId}`);
+
+	if (wasFocused) {
+		canvasStore.unfocusNode();
+	}
+}

@@ -6,7 +6,7 @@
 	export let isFullscreen: boolean = false; // Currently unused but kept for future features
 </script>
 
-<div id={String(id)} class="image-node" style="background-color: {color};">
+<div id={String(id)} class="image-node">
 	{#if content && (content.match(/^(https?:)?\/\//) || content.startsWith('data:image/'))}
 		<img src={content} alt="Image node {id}" />
 	{:else}
@@ -21,17 +21,22 @@
 	.image-node {
 		width: 100%;
 		height: 100%;
+		max-width: 100%;
+		max-height: 100%;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		border-radius: 6px;
 		overflow: hidden;
+		background: transparent;
 	}
 
 	.image-node img {
+		width: 100%;
+		height: 100%;
 		max-width: 100%;
 		max-height: 100%;
-		object-fit: contain;
+		object-fit: cover;
 		pointer-events: none;
 	}
 

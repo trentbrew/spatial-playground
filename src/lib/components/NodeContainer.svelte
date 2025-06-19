@@ -44,7 +44,8 @@
 	const isBoundaryHit = $derived(boundaryHitBoxId === box.id);
 
 	// Check if this node should be clickable based on focus state
-	const isClickable = $derived(isNodeClickable(box.z, currentZoom));
+	const isFocused = $derived(zoomedBoxId !== null);
+	const isClickable = $derived(isNodeClickable(box.z, currentZoom, isFocused));
 
 	// Precompute expected focus zoom for this node's depth
 	const focusZoom = $derived(getFocusZoomForZ(box.z));
@@ -82,6 +83,11 @@
 	}
 
 	function handleDoubleClick(event: MouseEvent) {
+		// Don't zoom out for sticky notes - let them handle double-click for editing
+		if (box.type === 'sticky') {
+			return;
+		}
+
 		// A double click will now restore the previous zoom level (zoom out)
 		canvasStore.restorePreviousZoom();
 	}
@@ -144,6 +150,10 @@
 			// Exit fullscreen if the double-click is on the handle
 			event.stopPropagation();
 			canvasStore.exitFullscreen();
+		} else if (box.type === 'sticky') {
+			// Don't zoom out for sticky notes - just prevent the action
+			event.stopPropagation();
+			return;
 		} else {
 			// If not fullscreen, treat it as a regular double-click to zoom out
 			handleDoubleClick(event);
@@ -203,7 +213,7 @@
 				: 'auto'}
 >
 	<!-- Drag handle placeholder -->
-	<div
+	<!-- <div
 		class="drag-handle"
 		role="button"
 		tabindex="0"
@@ -213,7 +223,6 @@
 		ondblclick={handleDragHandleDoubleClick}
 		onkeydown={handleDragHandleKeyDown}
 	>
-		<!-- Close button in top-right -->
 		<button
 			class="close-button"
 			data-cursor="close-button"
@@ -223,7 +232,7 @@
 		>
 			×
 		</button>
-	</div>
+	</div> -->
 
 	<!-- Node-specific content -->
 	<Component
@@ -232,6 +241,7 @@
 		color={box.color}
 		isSelected={selectedBoxId === box.id}
 		isFullscreen={fullscreenBoxId === box.id}
+		isFocused={zoomedBoxId === box.id}
 	/>
 
 	{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
@@ -246,7 +256,22 @@
 			onkeydown={(e) => e.stopPropagation()}
 			title="Resize"
 			aria-label="Resize node"
-		></div>
+		>
+			<svg
+				width="16"
+				height="17"
+				viewBox="0 0 16 17"
+				fill="none"
+				xmlns="http://www.w3.org/2000/svg"
+			>
+				<path
+					d="M2 14.8491C6.5 14.8491 14.7818 12.5626 13.9391 2"
+					stroke="white"
+					stroke-width="3"
+					stroke-linecap="round"
+				/>
+			</svg>
+		</div>
 	{/if}
 </div>
 
@@ -311,7 +336,7 @@
 		transition:
 			opacity 0.2s ease,
 			background-color 0.2s ease;
-		color: var(--text-color, #666);
+		color: var(--text-color, #444);
 	}
 
 	.close-button:hover {
@@ -319,49 +344,48 @@
 		background-color: rgba(255, 0, 0, 0.1);
 		color: #ff4444;
 	}
-	/* Single corner resize handle (bottom-right) - curved corner style */
+	/* Single corner resize handle (bottom-right) - custom SVG style */
 	.resize-handle.handle-se {
 		position: absolute;
-		bottom: -4px;
-		right: -4px;
+		bottom: -18px;
+		right: -20px;
 		cursor: nwse-resize;
-		width: 32px;
-		height: 32px;
-		background: transparent;
+		width: 24px;
+		height: 24px;
+		background: rgba(40, 40, 40, 0);
 		border: none;
-		overflow: hidden;
+		border-radius: 8px;
+		/* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); */
 		z-index: 15;
-		opacity: 1;
+		opacity: 0.5;
 		pointer-events: auto;
 		display: flex;
 		align-items: center;
+		transition: 300ms !important;
 		justify-content: center;
-		padding: 0;
+		padding: 4px;
+	}
+
+	.resize-handle.handle-se:hover {
+		opacity: 1;
+		bottom: -22px;
+		right: -24px;
 	}
 
 	.resize-handle.handle-se svg {
 		display: block;
-		width: 32px;
-		height: 32px;
-		background: rgba(40, 40, 40, 0.95);
-		border-radius: 8px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-		transition:
-			opacity 0.2s ease,
-			background-color 0.2s ease,
-			box-shadow 0.2s ease;
-		color: #fff;
-		opacity: 0.95;
+		/* transform: translate(16px, 14px); */
+		width: 16px;
+		height: 24px;
 		pointer-events: none;
 	}
 
-	/* Subtle hover effect for curved handle */
-	.resize-handle.handle-se:hover::before {
+	/* Hover effect for custom SVG handle */
+	/* .resize-handle.handle-se:hover {
 		opacity: 1;
-		border-bottom-color: var(--resize-handle-hover-border, rgba(255, 255, 255, 1));
-		border-right-color: var(--resize-handle-hover-border, rgba(255, 255, 255, 1));
+		background-color: rgba(60, 60, 60, 0.95);
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-	}
+	} */
 	.box.selected {
 		border: 2px solid var(--box-selected-border-color);
 		/* Enhanced selected state that preserves depth shadow */
@@ -402,12 +426,7 @@
 	}
 
 	.box.fullscreen-transition {
-		/* Match duration and easing with the focus transition */
-		transition:
-			width var(--focus-transition-duration) ease-in-out,
-			height var(--focus-transition-duration) ease-in-out,
-			left var(--focus-transition-duration) ease-in-out,
-			top var(--focus-transition-duration) ease-in-out;
+		transition: all var(--focus-transition-duration) cubic-bezier(0.25, 0.46, 0.45, 0.94);
 	}
 
 	/* Z-Index Indicator Styles */

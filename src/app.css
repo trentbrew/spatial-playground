@@ -31,7 +31,7 @@
 	--resize-handle-bg: #fff;
 	--resize-handle-border: #999;
 	--control-button-bg: #444;
-	--control-button-hover-bg: #666;
+	--control-button-hover-bg: #555;
 	--control-button-text: white;
 	--preview-bg-color: rgba(50, 200, 50, 0.2);
 	--preview-border-color: #32c832;
@@ -40,7 +40,7 @@
 
 [data-theme='dark'] {
 	--handle-height: 20px; /* Define handle height (consistent) */
-	--bg-color: #1a1a1a;
+	--bg-color: #000000;
 	--bg-canvas-color: #242424; /* Slightly lighter than viewport bg */
 	--text-color: #f0f0f0;
 	--box-border-color: #888;
