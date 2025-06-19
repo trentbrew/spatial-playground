@@ -69,8 +69,9 @@
 				case 'resize':
 					return updateCursorForResize(time);
 				case 'drag':
-					// Don't morph for drag handles, just use normal cursor
 					return updateNormalCursor(time);
+				case 'box':
+					return updateCursorForBox(time);
 			}
 		}
 		return updateNormalCursor(time);
@@ -116,7 +117,10 @@
 		cursorElement.style.transform = `translate3d(${transitionX}px, ${transitionY}px, 0)`;
 		cursorElement.style.width = `${width}px`;
 		cursorElement.style.height = `${height}px`;
-		cursorElement.style.borderRadius = `${Math.min(width, height) / 2}px`;
+		// Only set border radius if not hovering a box (let box hover handle its own radius)
+		if (!hoverContext || hoverContext.type !== 'box') {
+			cursorElement.style.borderRadius = `${Math.min(width, height) / 2}px`;
+		}
 	}
 
 	function lerp(a: number, b: number, n: number) {
@@ -203,6 +207,46 @@
 		return { x, y };
 	}
 
+	function updateCursorForBox(time: number) {
+		if (!hoverContext) return updateNormalCursor(time);
+		const { rect } = hoverContext;
+		const padding = 6;
+		const width = rect.width + padding * 2;
+		const height = rect.height + padding * 2;
+		const center = {
+			x: rect.left + rect.width / 2,
+			y: rect.top + rect.height / 2
+		};
+
+		const { x, y } = tweenCursor({
+			x: center.x,
+			y: center.y,
+			width,
+			height,
+			time
+		});
+
+		morphCursor({ x, y, width, height });
+
+		// Style: transparent fill, white border, subtle shadow
+		if (cursorElement) {
+			cursorElement.style.backgroundColor = 'transparent';
+			cursorElement.style.border = '2px solid rgba(255,255,255,0.8)';
+			cursorElement.style.boxShadow = '0 0 8px rgba(255,255,255,0.4)';
+			cursorElement.style.borderRadius = '20px';
+			cursorElement.style.zIndex = '0';
+		}
+		return { x, y };
+	}
+
+	function resetCursorVisual() {
+		if (!cursorElement) return;
+		cursorElement.style.border = 'none';
+		cursorElement.style.boxShadow = 'none';
+		cursorElement.style.backgroundColor = 'rgba(255,255,255,0.8)';
+		cursorElement.style.zIndex = '999999';
+	}
+
 	function setHoverContext(el: Element, type: string) {
 		hoverContext = {
 			type,
@@ -236,7 +280,8 @@
 			},
 			{ selector: '[data-cursor="drag"]', type: 'drag' },
 			{ selector: '[data-cursor="resize"]', type: 'resize' },
-			{ selector: '[data-cursor="close-button"]', type: 'close-button' }
+			{ selector: '[data-cursor="close-button"]', type: 'close-button' },
+			{ selector: '.box', type: 'box' }
 		];
 
 		const cleanup: (() => void)[] = [];
@@ -359,7 +404,7 @@
 <style>
 	.custom-cursor {
 		background-color: rgba(255, 255, 255, 0.8);
-		border-radius: 50%;
+		border-radius: 20px !important;
 		width: 20px;
 		height: 20px;
 		transform-origin: center;

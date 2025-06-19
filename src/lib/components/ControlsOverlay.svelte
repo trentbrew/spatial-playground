@@ -208,9 +208,9 @@
 	</div>
 
 	<!-- Viewport State Display -->
-	<div class="viewport-info">
+	<!-- <div class="viewport-info">
 		Zoom: {currentZoom.toFixed(2)} | X: {currentOffsetX.toFixed(1)} | Y: {currentOffsetY.toFixed(1)}
-	</div>
+	</div> -->
 
 	<!-- Keyboard Shortcuts Hint -->
 	<!-- {#if selectedBoxId !== null}
@@ -226,14 +226,20 @@
 	.controls-container {
 		position: fixed;
 		bottom: 20px;
-		left: 20px;
+		left: 0;
+		right: 0;
+		display: flex;
+		justify-content: center;
+		border: 1px solid var(--box-border-color);
+		margin: 0 20px;
 		z-index: 100;
 		display: flex;
 		gap: 10px;
 		align-items: center;
 		background-color: rgba(128, 128, 128, 0.1);
+		backdrop-filter: blur(24px);
 		padding: 8px;
-		border-radius: 6px;
+		border-radius: 10px;
 	}
 
 	.control-button {

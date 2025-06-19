@@ -3,5 +3,5 @@
 	import CustomCursor from '$lib/components/CustomCursor.svelte';
 </script>
 
-<!-- <CustomCursor /> -->
+<CustomCursor />
 <slot />

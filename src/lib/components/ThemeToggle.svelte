@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { theme } from '$lib/stores/themeStore';
+	import { Sun, Moon } from '@lucide/svelte';
 
 	function toggleTheme() {
 		theme.update((current) => (current === 'light' ? 'dark' : 'light'));
@@ -8,9 +9,9 @@
 
 <button on:click={toggleTheme} data-cursor="button" aria-label="Toggle theme">
 	{#if $theme === 'light'}
-		<span>🌙</span> <!-- Show moon icon for switching to dark -->
+		<Moon />
 	{:else}
-		<span>☀️</span> <!-- Show sun icon for switching to light -->
+		<Sun />
 	{/if}
 </button>
 

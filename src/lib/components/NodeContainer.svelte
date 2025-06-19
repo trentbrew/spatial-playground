@@ -6,6 +6,7 @@
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 	import { FOCUS_TRANSITION_DURATION } from '$lib/constants';
 	import { isNodeClickable } from '$lib/utils/depth';
+	import { getFocusZoomForZ } from '$lib/utils/depth';
 	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
 	import type { AppBoxState } from '$lib/canvasState';
 
@@ -45,6 +46,9 @@
 	// Check if this node should be clickable based on focus state
 	const isClickable = $derived(isNodeClickable(box.z, currentZoom));
 
+	// Precompute expected focus zoom for this node's depth
+	const focusZoom = $derived(getFocusZoomForZ(box.z));
+
 	const Component = nodeComponentMap[box.type] || nodeComponentMap['sticky'];
 
 	// Component references for actions
@@ -55,7 +59,8 @@
 		console.log(`[NodeContainer] Clicked box id: ${box.id}`, box);
 
 		// Check if this box is already selected and zoomed (focused)
-		const isAlreadyFocused = selectedBoxId === box.id && zoomedBoxId === box.id;
+		const isAlreadyFocused =
+			selectedBoxId === box.id && zoomedBoxId === box.id && currentZoom >= focusZoom * 0.95; // add tolerance
 
 		if (isAlreadyFocused) {
 			// If already focused, don't zoom - just allow interaction with content
