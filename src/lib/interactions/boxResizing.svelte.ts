@@ -47,8 +47,8 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 
 		window.addEventListener('mousemove', handleMouseMove);
 		window.addEventListener('touchmove', handleTouchMove, { passive: false });
-		window.addEventListener('mouseup', handleMouseUp);
-		window.addEventListener('touchend', handleTouchEnd, { passive: false });
+		window.addEventListener('mouseup', handlePointerUp);
+		window.addEventListener('touchend', handlePointerUp);
 		event.preventDefault();
 		event.stopPropagation();
 	}
@@ -79,7 +79,7 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 		}
 
 		window.addEventListener('touchmove', handleTouchMove, { passive: false });
-		window.addEventListener('touchend', handleTouchEnd, { passive: false });
+		window.addEventListener('touchend', handlePointerUp, { passive: false });
 		event.preventDefault();
 		event.stopPropagation();
 	}
@@ -149,23 +149,27 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 		});
 	}
 
-	function handleMouseUp() {
+	function handlePointerUp(event: MouseEvent | TouchEvent) {
 		if (!isResizing) return;
 		isResizing = false;
+
+		// Stop the event from bubbling up and causing a click on the viewport
+		event.stopPropagation();
 
 		// Refresh ghosting after resizing ends, since box size changed
 		if (viewportWidth > 0 && viewportHeight > 0) {
 			canvasStore.onViewChange(viewportWidth, viewportHeight);
 		}
 
+		// Explicitly re-focus the box after resizing to prevent accidental unfocus
+		setTimeout(() => {
+			canvasStore.zoomToBox(boxId, viewportWidth, viewportHeight);
+		}, 10);
+
 		window.removeEventListener('mousemove', handleMouseMove);
 		window.removeEventListener('touchmove', handleTouchMove);
-		window.removeEventListener('mouseup', handleMouseUp);
-		window.removeEventListener('touchend', handleTouchEnd);
-	}
-
-	function handleTouchEnd() {
-		handleMouseUp(); // Reuse mouseup logic for cleanup
+		window.removeEventListener('mouseup', handlePointerUp);
+		window.removeEventListener('touchend', handlePointerUp);
 	}
 
 	node.addEventListener('mousedown', handleMouseDown);
@@ -178,8 +182,8 @@ export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 			// Ensure global listeners are removed if destroyed mid-resize
 			window.removeEventListener('mousemove', handleMouseMove);
 			window.removeEventListener('touchmove', handleTouchMove);
-			window.removeEventListener('mouseup', handleMouseUp);
-			window.removeEventListener('touchend', handleTouchEnd);
+			window.removeEventListener('mouseup', handlePointerUp);
+			window.removeEventListener('touchend', handlePointerUp);
 		}
 	};
 };

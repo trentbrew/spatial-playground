@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { theme } from '$lib/stores/themeStore';
-	import { Sun, Moon } from '@lucide/svelte';
+	import { Sun, Moon } from 'lucide-svelte';
 
 	function toggleTheme() {
 		theme.update((current) => (current === 'light' ? 'dark' : 'light'));
 	}
 </script>
 
-<button on:click={toggleTheme} data-cursor="button" aria-label="Toggle theme">
+<button onclick={toggleTheme} data-cursor="button" aria-label="Toggle theme">
 	{#if $theme === 'light'}
 		<Moon />
 	{:else}

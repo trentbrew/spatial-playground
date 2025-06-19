@@ -333,6 +333,15 @@
 </div>
 
 <style>
+	.toolbar {
+		width: 100%;
+		height: 100%;
+		position: absolute;
+		top: 0;
+		left: 0;
+		pointer-events: none;
+		z-index: 10;
+	}
 	.box {
 		position: absolute;
 		box-sizing: border-box;
@@ -641,9 +650,9 @@
 		padding: 0 8px 0 8px;
 		z-index: 20;
 		user-select: none;
-		font-size: 17px;
+		font-size: 16px;
 		font-weight: 500;
-		color: #eaeaea;
+		color: #ffffff;
 		box-sizing: border-box;
 		pointer-events: auto;
 		border-bottom: 1.5px solid rgba(255, 255, 255, 0.08);

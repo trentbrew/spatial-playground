@@ -117,7 +117,10 @@
 						y: mousePosition.y,
 						width: defaultCursorSize * scaleDown,
 						height: defaultCursorSize * scaleDown,
-						rotation: 0
+						rotation: 0,
+						transition: 'none',
+						opacity: 0.5,
+						background: 'transparent'
 					};
 				case 'button':
 				case 'close-button': {
@@ -251,7 +254,14 @@
 
 		cursorElement.style.width = `${width}px`;
 		cursorElement.style.height = `${height}px`;
-		cursorElement.style.opacity = isVisible ? '1' : '0';
+		// cursorElement.style.opacity = isVisible ? '1' : '0';
+		// Handle cursor shrinking when hovering over text inputs or editors
+		if (hoverContext?.type === 'text-input' || hoverContext?.type === 'editor') {
+			cursorElement.style.width = '2px';
+			cursorElement.style.height = '16px';
+			cursorElement.style.borderRadius = '1px';
+			cursorElement.style.opacity = '0.8';
+		}
 
 		// Enhanced border radius logic
 		if (!hoverContext || hoverContext.type !== 'box') {
@@ -421,7 +431,7 @@
 			{ selector: '[data-cursor="close-button"]', type: 'close-button' },
 			{ selector: '[data-cursor="ignore"]', type: 'ignore' },
 			{ selector: '.iframe-container', type: 'ignore' },
-			{ selector: '.box', type: 'box' }
+			{ selector: '.box', type: 'ignore' }
 		];
 
 		const cleanup: (() => void)[] = [];
@@ -475,7 +485,6 @@
 
 		const style = document.createElement('style');
 		style.textContent = `
-			* { cursor: none !important; }
 			html, body { cursor: none !important; }
 			.drag-handle { cursor: none !important; }
 			.resize-handle { cursor: none !important; }
@@ -554,5 +563,14 @@
 			box-shadow 0.2s cubic-bezier(0.4, 1.6, 0.6, 1),
 			border 0.2s cubic-bezier(0.4, 1.6, 0.6, 1),
 			background-color 0.2s cubic-bezier(0.4, 1.6, 0.6, 1);
+	}
+
+	:global(body.hovering-color-swatch) .cursor {
+		background-color: transparent !important;
+		border: none !important;
+	}
+
+	:global(body.hovering-color-swatch) .cursor::before {
+		display: none !important;
 	}
 </style>

@@ -3,6 +3,7 @@
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import { getTextColorForBackground } from '$lib/utils/colorUtils';
 	import { browser } from '$app/environment';
+	import { fade } from 'svelte/transition';
 
 	// Use $props() rune for component props
 	let {
@@ -21,6 +22,34 @@
 		isFocused: boolean;
 	} = $props();
 
+	// Color palette state
+	let showColorPalette = $state(false);
+	const PRESET_COLORS = [
+		'#212121',
+		'#616161',
+		'#f44336',
+		'#e91e63',
+		'#9c27b0',
+		'#673ab7',
+		'#3f51b5',
+		'#2196f3',
+		'#03a9f4',
+		'#00bcd4',
+		'#009688',
+		'#4caf50',
+		'#8bc34a',
+		'#cddc39',
+		'#ffeb3b',
+		'#ffc107',
+		'#ff9800',
+		'#795548'
+	];
+
+	function handleColorSelect(newColor: string) {
+		canvasStore.updateBox(id, { color: newColor });
+		showColorPalette = false; // Hide palette after selection
+	}
+
 	// Handle content that might be a string or an object
 	let textContent = $state('');
 	let useQuillEditor = $state(false);
@@ -30,144 +59,180 @@
 		if (typeof content === 'string') {
 			textContent = content;
 		} else if (content && typeof content === 'object') {
-			textContent = content.body || content.title || '';
-		} else {
-			textContent = '';
+			// Handle complex content object
+			textContent = content.body || '';
 		}
 	});
 
-	// Use $derived rune to calculate text color based on background
-	// const contrastingTextColor = $derived(getTextColorForBackground(color));
+	$effect(() => {
+		if (browser) {
+			import('../QuillEditor.svelte').then((module) => {
+				QuillEditor = module.default;
+				useQuillEditor = true;
+			});
+		}
+	});
+
+	// Use a static text color for better readability with custom backgrounds
 	const contrastingTextColor = '#181818';
 
 	// Handle content changes from Quill editor
-	function handleContentChange(newContent: { delta?: any; text: string }) {
-		// Update the canvas store with the new content
-		canvasStore.updateBox(id, { content: newContent.text });
+	function handleContentChange(event: CustomEvent<{ text: string; delta: any }>) {
+		const newText = event.detail.text;
+		canvasStore.updateBox(id, { content: newText });
 	}
 
-	// Handle textarea content changes (fallback)
+	// Handle content changes from fallback textarea
 	function handleTextareaChange(event: Event) {
-		const target = event.target as HTMLTextAreaElement;
-		canvasStore.updateBox(id, { content: target.value });
+		const newText = (event.target as HTMLTextAreaElement).value;
+		canvasStore.updateBox(id, { content: newText });
 	}
 
-	// Try to load Quill editor
-	onMount(async () => {
-		if (!browser) return;
-
-		try {
-			// Dynamically import the QuillEditor component
-			const module = await import('../QuillEditor.svelte');
-			QuillEditor = module.default;
-			useQuillEditor = true;
-			console.log('QuillEditor loaded successfully');
-		} catch (error) {
-			console.warn('Failed to load QuillEditor, using fallback textarea:', error);
-			useQuillEditor = false;
+	function handleSwatchHover(isHovering: boolean) {
+		if (browser) {
+			document.body.classList.toggle('hovering-color-swatch', isHovering);
 		}
-	});
+	}
 </script>
 
-<div id={String(id)} class="sticky-note-content" style="background-color: {color};">
-	<div class="editor-container" style="color: {contrastingTextColor};">
-		{#if useQuillEditor && QuillEditor}
-			<!-- Use Quill Editor when available -->
-			<QuillEditor
-				content={textContent}
-				onContentChange={handleContentChange}
-				placeholder="Start writing..."
-				{isFocused}
-			/>
-		{:else}
-			<!-- Fallback to simple textarea -->
-			<textarea
-				bind:value={textContent}
-				oninput={handleTextareaChange}
-				placeholder="Start writing..."
-				class="fallback-textarea"
-				style="color: {contrastingTextColor};"
-			></textarea>
+<div class="sticky-note-container" style:background-color={color}>
+	<div class="sticky-note-content">
+		<div class="editor-container">
+			{#if useQuillEditor && QuillEditor}
+				<!-- Use Quill Editor when available -->
+				<QuillEditor
+					{content}
+					{isFocused}
+					showColorButton={true}
+					on:colorpick={() => (showColorPalette = !showColorPalette)}
+					onContentChange={handleContentChange}
+					placeholder="Start writing..."
+				/>
+			{:else}
+				<!-- Fallback for SSR or if Quill fails -->
+				<textarea
+					bind:value={textContent}
+					oninput={handleTextareaChange}
+					placeholder="Start writing..."
+					class="fallback-textarea"
+					style:color={contrastingTextColor}
+				></textarea>
+			{/if}
+		</div>
+
+		{#if showColorPalette && isFocused}
+			<div class="color-palette-wrapper" transition:fade={{ duration: 150 }}>
+				<div class="color-palette">
+					{#each PRESET_COLORS as presetColor}
+						<button
+							class="color-swatch"
+							style:background-color={presetColor}
+							aria-label="Set color to {presetColor}"
+							onclick={() => handleColorSelect(presetColor)}
+							onmouseover={() => handleSwatchHover(true)}
+							onmouseout={() => handleSwatchHover(false)}
+						>
+							{#if presetColor === color}
+								<div class="selected-indicator" />
+							{/if}
+						</button>
+					{/each}
+				</div>
+			</div>
 		{/if}
 	</div>
 </div>
 
 <style>
+	.sticky-note-container {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		border-radius: 8px;
+		transition: background-color 0.2s;
+		position: relative;
+	}
+
 	.sticky-note-content {
 		width: 100%;
 		height: 100%;
-		padding: 12px;
+		padding: 0;
 		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
-		overflow: visible;
+		align-items: center;
+		overflow: visible; /* Allow toolbar to show outside */
 		border-radius: 6px;
 		position: relative;
 	}
 
 	.editor-container {
-		flex: 1;
-		overflow: hidden;
+		flex-grow: 1;
+		position: relative;
+		border-radius: 6px;
+		overflow: hidden; /* Clip the editor content but not the wrapper */
 		display: flex;
 		flex-direction: column;
-		min-height: 0; /* Important for flex child to shrink */
+		align-items: center;
 	}
 
 	.fallback-textarea {
-		flex: 1;
-		border: none;
-		outline: none;
-		background: transparent;
-		resize: none;
-		font-family: inherit;
-		font-size: 13px;
-		line-height: 1.5;
-		padding: 8px;
-		box-sizing: border-box;
-		color: inherit;
 		width: 100%;
 		height: 100%;
-	}
-
-	.fallback-textarea::placeholder {
-		color: inherit;
-		opacity: 0.6;
-		font-style: italic;
-	}
-
-	/* Override Quill styles to match sticky note theme */
-	:global(.sticky-note-content .ql-editor) {
-		color: inherit;
-		background: transparent;
+		padding: 12px;
+		box-sizing: border-box;
 		border: none;
+		outline: none;
+		resize: none;
+		background-color: transparent;
+		font-family: inherit;
+		font-size: 14px;
+	}
+
+	.color-palette-wrapper {
+		position: absolute;
+		bottom: -100px; /* Position it below the toolbar */
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 110; /* Above the toolbar */
+		background: #2a2a2e;
+		border-radius: 8px;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 		padding: 8px;
-		font-size: 13px;
-		line-height: 1.5;
-		font-family: inherit;
 	}
 
-	:global(.sticky-note-content .ql-editor.ql-blank::before) {
-		color: inherit;
-		opacity: 0.6;
-		font-style: italic;
+	.color-palette {
+		display: grid;
+		grid-template-columns: repeat(6, 1fr);
+		gap: 6px;
 	}
 
-	:global(.sticky-note-content .ql-container) {
-		border: none;
-		background: transparent;
-		font-family: inherit;
+	.color-swatch {
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		cursor: pointer;
+		transition: transform 0.1s ease-out;
+		position: relative;
 	}
 
-	:global(.sticky-note-content .ql-toolbar) {
-		background: rgba(255, 255, 255, 0.95);
-		border: 1px solid rgba(0, 0, 0, 0.1);
-		border-radius: 6px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		backdrop-filter: blur(8px);
+	.color-swatch:hover {
+		transform: scale(1.1);
 	}
 
-	/* Ensure toolbar appears above other elements */
-	:global(.sticky-note-content .ql-toolbar.ql-snow) {
-		z-index: 1001;
+	.selected-indicator {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: white;
+		border: 2px solid #2a2a2e;
+		box-shadow: 0 0 0 1px white;
 	}
 </style>

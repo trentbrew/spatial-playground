@@ -143,7 +143,7 @@
 	.context-menu {
 		position: fixed;
 		z-index: 10000; /* Above everything else */
-		background: rgba(45, 45, 55, 0.95);
+		background: #181818;
 		backdrop-filter: blur(10px);
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 8px;

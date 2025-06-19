@@ -10,7 +10,7 @@ export const FOCAL_PLANE_TARGET_SCALE = 1.2;
 export const DOF_SHARPNESS_FACTOR = 5;
 
 // Dynamic depth of field - much more dramatic when a node is focused
-export const DOF_FOCUSED_SHARPNESS_FACTOR = 10; // Shallow depth when focused
+export const DOF_FOCUSED_SHARPNESS_FACTOR = 4; // Shallow depth when focused
 export const DOF_EXPLORATION_SHARPNESS_FACTOR = 5; // Wide depth for exploration
 
 // Default dimensions for different node types

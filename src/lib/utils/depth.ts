@@ -96,7 +96,7 @@ export const isNodeClickable = (z: number, zoom: number, isFocused: boolean = fa
 
 	// If the node is significantly blurred (more than 3px), make it non-clickable
 	// This threshold can be adjusted based on UX preferences
-	const BLUR_THRESHOLD = 3.0;
+	const BLUR_THRESHOLD = 5.0;
 
 	return blurAmount <= BLUR_THRESHOLD;
 };
