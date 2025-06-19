@@ -315,9 +315,9 @@
 						canvasStore.updateBox(box.id, { content: newContent });
 					}}
 				/>
-				<button class="node-close pin-btn" title="Pin" aria-label="Pin node" onclick={handlePin}>
+				<!-- <button class="node-close pin-btn" title="Pin" aria-label="Pin node" onclick={handlePin}>
 					<Pin fill={isPinned ? 'yellow' : 'none'} class="h-5 w-5" />
-				</button>
+				</button> -->
 				<button class="node-close" title="Settings" aria-label="Settings" onclick={handleSettings}>
 					<Settings2 class="h-5 w-5" />
 				</button>
@@ -369,13 +369,15 @@
 		<!-- BACK: Settings/properties -->
 		<div class="flip-back">
 			<div class="settings-header">
-				<span>Node Properties</span>
 				<button
-					class="node-close"
+					class="node-close back-arrow"
 					title="Back"
 					aria-label="Back to node"
-					onclick={handleBackFromSettings}><ArrowDown /></button
+					onclick={handleBackFromSettings}
 				>
+					<ArrowDown class="h-5 w-5" style="transform: rotate(90deg);" />
+				</button>
+				<span>Node Properties</span>
 			</div>
 			<div class="settings-content">
 				<div><b>Type:</b> {box.type}</div>
@@ -817,11 +819,12 @@
 	.settings-header {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: flex-start;
 		width: 100%;
 		font-size: 16px;
 		font-weight: 600;
 		margin-bottom: 12px;
+		gap: 8px;
 	}
 	.settings-content {
 		width: 100%;
@@ -845,5 +848,8 @@
 			0 0 0 3px gold,
 			0 2px 8px rgba(0, 0, 0, 0.2);
 		border-color: gold;
+	}
+	.back-arrow {
+		margin-right: 10px;
 	}
 </style>
