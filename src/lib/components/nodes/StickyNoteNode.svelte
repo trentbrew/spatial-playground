@@ -46,7 +46,8 @@
 	];
 
 	function handleColorSelect(newColor: string) {
-		canvasStore.updateBox(id, { color: newColor });
+		const foregroundColor = getTextColorForBackground(newColor);
+		canvasStore.updateBox(id, { color: newColor, foregroundColor });
 		showColorPalette = false; // Hide palette after selection
 	}
 
@@ -107,6 +108,9 @@
 					on:colorpick={() => (showColorPalette = !showColorPalette)}
 					onContentChange={handleContentChange}
 					placeholder="Start writing..."
+					foregroundColor={color && box.foregroundColor
+						? box.foregroundColor
+						: getTextColorForBackground(color)}
 				/>
 			{:else}
 				<!-- Fallback for SSR or if Quill fails -->
@@ -170,6 +174,7 @@
 
 	.editor-container {
 		flex-grow: 1;
+		width: 100%;
 		position: relative;
 		border-radius: 6px;
 		overflow: hidden; /* Clip the editor content but not the wrapper */

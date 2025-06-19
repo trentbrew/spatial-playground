@@ -15,7 +15,12 @@
 	import SceneStats from './SceneStats.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
-	import { FOCUS_TRANSITION_DURATION, DEFAULT_NODE_DIMENSIONS } from '$lib/constants';
+	import {
+		FOCUS_TRANSITION_DURATION,
+		DEFAULT_NODE_DIMENSIONS,
+		MAX_NODE_WIDTH,
+		MAX_NODE_HEIGHT
+	} from '$lib/constants';
 	// Lucide icons - ignore TS type errors via global declaration
 	// @ts-ignore
 	import {
@@ -598,7 +603,7 @@
 		const aspectRatio = imgW / imgH;
 
 		// Set maximum dimensions
-		const MAX_DIM = 400;
+		const MAX_DIM = MAX_NODE_WIDTH;
 
 		// Calculate dimensions that maintain aspect ratio and fit within MAX_DIM
 		let boxWidth, boxHeight;

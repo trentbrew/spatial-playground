@@ -189,12 +189,12 @@
 	}
 
 	.menu-item:hover:not(.disabled) {
-		background: rgba(74, 144, 226, 0.2);
+		/* background: rgba(74, 144, 226, 0.2); */
 		color: #ffffff;
 	}
 
 	.menu-item:focus:not(.disabled) {
-		background: rgba(74, 144, 226, 0.3);
+		/* background: rgba(74, 144, 226, 0.3); */
 		color: #ffffff;
 		outline: none;
 	}

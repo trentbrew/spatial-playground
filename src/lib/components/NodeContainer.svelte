@@ -14,18 +14,26 @@
 	import {
 		X,
 		File,
+		Pin,
+		Settings2,
 		Clapperboard,
 		AudioLines,
+		SquarePen,
 		Table,
 		StickyNote,
 		Globe,
 		Image,
-		Code
+		Code,
+		Target,
+		Copy,
+		ArrowUp,
+		ArrowDown,
+		Trash
 	} from 'lucide-svelte';
 
 	// Icon mapping for node types
 	const nodeTypeIcons: Record<string, any> = {
-		sticky: StickyNote,
+		sticky: SquarePen,
 		image: Image,
 		embed: Globe,
 		file: File,
@@ -91,6 +99,10 @@
 	const depthFactor = 60; // px per z layer
 	const zTransform = `perspective(800px) translateZ(${box.z * depthFactor}px) rotateX(${box.z * -2}deg) rotateY(${box.z * 1.5}deg)`;
 
+	// Add local state for flipping and pinning
+	let showSettingsBack = false;
+	let isPinned = false; // Demo fallback, real pin logic to be added
+
 	function handleClick(event: MouseEvent) {
 		console.log(`[NodeContainer] Clicked box id: ${box.id}`, box);
 
@@ -136,30 +148,30 @@
 			{
 				id: 'focus',
 				label: 'Focus Node',
-				icon: '🎯',
+				icon: Target,
 				disabled: selectedBoxId === box.id && zoomedBoxId === box.id
 			},
 			{
 				id: 'duplicate',
 				label: 'Duplicate',
-				icon: '📋'
+				icon: Copy
 			},
 			{ id: 'sep1', label: '', separator: true },
 			{
 				id: 'bring-forward',
 				label: 'Bring Forward',
-				icon: '⬆️'
+				icon: ArrowUp
 			},
 			{
 				id: 'send-backward',
 				label: 'Send Backward',
-				icon: '⬇️'
+				icon: ArrowDown
 			},
 			{ id: 'sep2', label: '', separator: true },
 			{
 				id: 'delete',
 				label: 'Delete',
-				icon: '🗑️'
+				icon: Trash
 			}
 		];
 
@@ -208,10 +220,25 @@
 		event.stopPropagation(); // Prevent box selection
 		canvasStore.deleteBox(box.id);
 	}
+
+	function handlePin(event: MouseEvent) {
+		event.stopPropagation();
+		isPinned = !isPinned;
+	}
+
+	function handleSettings(event: MouseEvent) {
+		event.stopPropagation();
+		showSettingsBack = true;
+	}
+
+	function handleBackFromSettings(event: MouseEvent) {
+		event.stopPropagation();
+		showSettingsBack = false;
+	}
 </script>
 
 <div
-	class="box"
+	class="box {showSettingsBack ? 'flipped' : ''}"
 	tabindex="0"
 	onclick={handleClick}
 	ondblclick={handleDoubleClick}
@@ -225,8 +252,7 @@
 	class:ghosted={isGhosted}
 	class:boundary-hit={isBoundaryHit}
 	class:non-clickable={!isClickable && !isGhosted}
-	style:left="{box.x}px"
-	style:top="{box.y}px"
+	class:pinned={isPinned}
 	style:width="{Math.max(box.width, 360)}px"
 	style:height="{Math.max(box.height, 360)}px"
 	style:--z-brightness={box.z * 0.05}
@@ -246,90 +272,119 @@
 				? 'none'
 				: 'auto'}
 	style:transform="{zTransform} scale(calc(1 + var(--z-brightness, 0) * 0.5))"
+	style:position={isPinned ? 'fixed' : 'absolute'}
+	style:left={isPinned ? '40px' : `${box.x}px`}
+	style:top={isPinned ? '40px' : `${box.y}px`}
 >
-	<!-- Minimalist Node Toolbar/Header -->
-	<div class="node-toolbar">
-		{@render nodeIcon({ class: 'node-icon' })}
-		<input
-			type="text"
-			class="node-title-input"
-			placeholder="Untitled Node"
-			style="
-				background: none;
-				border: none;
-				outline: none;
-				color: #eaeaea;
-				font-size: 12px;
-				font-weight: 400;
-				padding: 2px 6px;
-				margin: 0;
-				border-radius: 4px;
-				width: auto;
-				flex: 1 1 auto;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-				opacity: 1;
-			"
-			style:opacity={nodeTitle ? 1 : 0.5}
-			value={nodeTitle || ''}
-			oninput={(e) => {
-				const input = e.target as HTMLInputElement;
-				let newContent: any = {};
-				if (box.content && typeof box.content === 'object' && !Array.isArray(box.content)) {
-					newContent = Object.assign({}, box.content, { title: input.value });
-				} else {
-					newContent = { title: input.value, body: box.content };
-				}
-				canvasStore.updateBox(box.id, { content: newContent });
-			}}
-		/>
-		<button class="node-close" title="Close" aria-label="Delete node" onclick={handleClose}
-			><X /></button
-		>
-	</div>
-
-	<!-- Node-specific content -->
-	<Component
-		id={box.id}
-		content={box.content}
-		color={box.color}
-		isSelected={selectedBoxId === box.id}
-		isFullscreen={fullscreenBoxId === box.id}
-		isFocused={zoomedBoxId === box.id}
-	/>
-
-	{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
-		<!-- Single corner resize handle (bottom-right) -->
-		<div
-			class="resize-handle handle-se"
-			role="button"
-			tabindex="0"
-			data-handle-type="se"
-			data-cursor="resize"
-			use:boxResizing={box.id}
-			onkeydown={(e) => e.stopPropagation()}
-			title="Resize"
-			aria-label="Resize node"
-		>
-			<!-- Resize handle icon -->
-			<svg
-				width="16"
-				height="17"
-				viewBox="0 0 16 17"
-				xmlns="http://www.w3.org/2000/svg"
-				style="display: block;"
-			>
-				<path
-					d="M2 14.8491C6.5 14.8491 14.7818 12.5626 13.9391 2"
-					stroke="white"
-					stroke-width="3"
-					stroke-linecap="round"
-					fill="none"
+	<div class="flip-inner">
+		<!-- FRONT: Node content -->
+		<div class="flip-front">
+			<div class="node-toolbar !gap-0 !px-0">
+				<div class="node-icon h-5 w-5 !opacity-50">{@render nodeIcon({ class: 'h-5 w-5' })}</div>
+				<input
+					type="text"
+					class="node-title-input"
+					placeholder="Untitled Node"
+					style="
+						background: none;
+						border: none;
+						outline: none;
+						color: #eaeaea;
+						font-size: 12px;
+						font-weight: 400;
+						padding: 2px 6px;
+						margin: 0;
+						border-radius: 4px;
+						width: auto;
+						flex: 1 1 auto;
+						white-space: nowrap;
+						overflow: hidden;
+						text-overflow: ellipsis;
+						opacity: 1;
+					"
+					style:opacity={nodeTitle ? 1 : 0.5}
+					value={nodeTitle || ''}
+					oninput={(e) => {
+						const input = e.target as HTMLInputElement;
+						let newContent: any = {};
+						if (box.content && typeof box.content === 'object' && !Array.isArray(box.content)) {
+							newContent = Object.assign({}, box.content, { title: input.value });
+						} else {
+							newContent = { title: input.value, body: box.content };
+						}
+						canvasStore.updateBox(box.id, { content: newContent });
+					}}
 				/>
-			</svg>
+				<button class="node-close pin-btn" title="Pin" aria-label="Pin node" onclick={handlePin}>
+					<Pin fill={isPinned ? 'yellow' : 'none'} class="h-5 w-5" />
+				</button>
+				<button class="node-close" title="Settings" aria-label="Settings" onclick={handleSettings}>
+					<Settings2 class="h-5 w-5" />
+				</button>
+				<button class="node-close" title="Close" aria-label="Delete node" onclick={handleClose}>
+					<X class="h-5 w-5" />
+				</button>
+			</div>
+			<Component
+				id={box.id}
+				content={box.content}
+				color={box.color}
+				isSelected={selectedBoxId === box.id}
+				isFullscreen={fullscreenBoxId === box.id}
+				isFocused={zoomedBoxId === box.id}
+			/>
+			{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
+				<div
+					class="resize-handle handle-se"
+					role="button"
+					tabindex="0"
+					data-handle-type="se"
+					data-cursor="resize"
+					use:boxResizing={box.id}
+					onkeydown={(e) => e.stopPropagation()}
+					title="Resize"
+					aria-label="Resize node"
+				>
+					<svg
+						width="16"
+						height="17"
+						viewBox="0 0 16 17"
+						xmlns="http://www.w3.org/2000/svg"
+						style="display: block;"
+					>
+						<path
+							d="M2 14.8491C6.5 14.8491 14.7818 12.5626 13.9391 2"
+							stroke="white"
+							stroke-width="3"
+							stroke-linecap="round"
+							fill="none"
+						/>
+					</svg>
+				</div>
+			{/if}
+			{#if isPinned}
+				<div class="pinned-indicator" title="Pinned">📌</div>
+			{/if}
 		</div>
-	{/if}
+		<!-- BACK: Settings/properties -->
+		<div class="flip-back">
+			<div class="settings-header">
+				<span>Node Properties</span>
+				<button
+					class="node-close"
+					title="Back"
+					aria-label="Back to node"
+					onclick={handleBackFromSettings}><ArrowDown /></button
+				>
+			</div>
+			<div class="settings-content">
+				<div><b>Type:</b> {box.type}</div>
+				<div><b>ID:</b> {box.id}</div>
+				<div><b>Properties:</b></div>
+				<pre>{JSON.stringify(box.content, null, 2)}</pre>
+			</div>
+		</div>
+	</div>
 </div>
 
 <style>
@@ -370,8 +425,9 @@
 			0 0 0 1px var(--box-border-color),
 			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
 				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.05));
-		min-width: 360px;
-		min-height: 360px;
+		min-width: 400px;
+		min-height: 400px;
+		perspective: 1200px;
 	}
 	.drag-handle {
 		width: 100%;
@@ -718,5 +774,76 @@
 	.node-close:hover {
 		background: rgba(255, 0, 0, 0.13);
 		color: cyan;
+	}
+
+	.flip-inner {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+		transform-style: preserve-3d;
+	}
+	.box.flipped .flip-inner {
+		transform: rotateY(180deg);
+	}
+	.flip-front,
+	.flip-back {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 100%;
+		height: 100%;
+		backface-visibility: hidden;
+		border-radius: inherit;
+		background: inherit;
+		box-sizing: border-box;
+		z-index: 1;
+	}
+	.flip-front {
+		z-index: 2;
+	}
+	.flip-back {
+		transform: rotateY(180deg);
+		background: #232b2b;
+		color: #eaeaea;
+		padding: 32px 24px 24px 24px;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: flex-start;
+		font-size: 14px;
+		z-index: 3;
+	}
+	.settings-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		font-size: 16px;
+		font-weight: 600;
+		margin-bottom: 12px;
+	}
+	.settings-content {
+		width: 100%;
+		font-size: 13px;
+		line-height: 1.5;
+		word-break: break-all;
+	}
+	.pinned-indicator {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		font-size: 22px;
+		pointer-events: none;
+		z-index: 30;
+	}
+	.pin-btn svg {
+		stroke: gold;
+	}
+	.box.pinned {
+		box-shadow:
+			0 0 0 3px gold,
+			0 2px 8px rgba(0, 0, 0, 0.2);
+		border-color: gold;
 	}
 </style>

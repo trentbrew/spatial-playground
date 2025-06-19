@@ -15,12 +15,12 @@ export const DOF_EXPLORATION_SHARPNESS_FACTOR = 5; // Wide depth for exploration
 
 // Default dimensions for different node types
 export const DEFAULT_NODE_DIMENSIONS = {
-	sticky: { width: 200, height: 150 },
-	code: { width: 300, height: 200 },
-	image: { width: 300, height: 200 },
-	embed: { width: 800, height: 600 },
-	note: { width: 200, height: 150 }
+	sticky: { width: 400, height: 400 },
+	code: { width: 500, height: 300 },
+	image: { width: 420, height: 200 },
+	embed: { width: 400, height: 400 },
+	note: { width: 400, height: 400 }
 } as const;
 
-export const MAX_NODE_WIDTH = 360;
-export const MAX_NODE_HEIGHT = 360;
+export const MAX_NODE_WIDTH = 400;
+export const MAX_NODE_HEIGHT = 400;
