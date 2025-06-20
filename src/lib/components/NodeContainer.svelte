@@ -28,8 +28,7 @@
 		Copy,
 		ArrowUp,
 		ArrowDown,
-		Trash,
-		GripVertical
+		Trash
 	} from 'lucide-svelte';
 
 	// Icon mapping for node types
@@ -412,13 +411,12 @@
 			<!-- Drag Handle (always visible but subtle) -->
 			{#if !fullscreenBoxId}
 				<div
+					role="button"
 					class="drag-handle"
 					onpointerdown={handleDragStart}
 					title="Drag to move"
 					aria-label="Drag to move node"
-				>
-					<GripVertical class="h-4 w-4 opacity-30" />
-				</div>
+				></div>
 			{/if}
 
 			{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
@@ -521,14 +519,11 @@
 	}
 	.drag-handle {
 		position: absolute;
-		bottom: -12px;
+		bottom: -28px !important;
 		left: 50%;
 		transform: translateX(-50%);
-		width: 60px;
-		height: 24px;
-		background-color: rgba(60, 60, 60, 0.8);
-		border: 1px solid rgba(120, 120, 120, 0.6);
-		border-radius: 12px;
+		width: 80px;
+		height: 23px !important;
 		cursor: move;
 		display: flex;
 		align-items: center;
@@ -536,14 +531,23 @@
 		z-index: 15;
 		opacity: 0.7;
 		transition: all 0.2s ease;
-		backdrop-filter: blur(4px);
+		opacity: 0.5;
+	}
+
+	.drag-handle::before {
+		content: '';
+		position: absolute;
+		width: 60px;
+		height: 3px;
+		background-color: #fff;
+		border-radius: 3px;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
 	}
 
 	.drag-handle:hover {
 		opacity: 1;
-		background-color: rgba(80, 80, 80, 0.9);
-		border-color: rgba(140, 140, 140, 0.8);
-		transform: translateX(-50%) scale(1.05);
 	}
 
 	.close-button {
