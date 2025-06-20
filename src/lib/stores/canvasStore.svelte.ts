@@ -7,6 +7,13 @@ import {
 import { getIntrinsicScaleFactor, getFocusZoomForZ, getParallaxFactor } from '$lib/utils/depth';
 import { detectObstruction } from '$lib/utils/obstruction';
 import { writable } from 'svelte/store';
+import {
+	turtleDbStore,
+	addNode as dbAddNode,
+	updateNode as dbUpdateNode,
+	deleteNode as dbDeleteNode,
+	loadNodes as dbLoadNodes
+} from '$lib/stores/turtleDbStore';
 
 // --- Constants ---
 const ZOOM_PADDING_FACTOR = 0.5; // Zoom to 50% of viewport size
@@ -96,33 +103,8 @@ function findNonOverlappingPosition(
 
 // Generate a rich, multi-layered scene with varied nodes and no overlaps per Z-level
 function generateRandomBoxes(): AppBoxState[] {
-	const colors = [
-		'#FF6B6B',
-		'#4ECDC4',
-		'#45B7D1',
-		'#96CEB4',
-		'#FECA57',
-		'#FF9FF3',
-		'#54A0FF',
-		'#5F27CD',
-		'#00D2D3',
-		'#FF9F43',
-		'#10AC84',
-		'#EE5A24',
-		'#0984E3',
-		'#6C5CE7',
-		'#A29BFE',
-		'#FD79A8',
-		'#FDCB6E',
-		'#E17055',
-		'#81ECEC',
-		'#74B9FF',
-		'#55A3FF',
-		'#26DE81',
-		'#FD79A8',
-		'#A29BFE',
-		'#6C5CE7'
-	];
+	// Use consistent dark gray for all nodes
+	const defaultColor = '#2a2a2a';
 
 	const nodeTypes = ['sticky', 'image', 'embed', 'text', 'code'];
 	const boxes: AppBoxState[] = [];
@@ -144,7 +126,7 @@ function generateRandomBoxes(): AppBoxState[] {
 			50 // padding between boxes (increased for better spacing)
 		);
 
-		const color = colors[Math.floor(Math.random() * colors.length)];
+		const color = defaultColor;
 		const type = nodeTypes[Math.floor(Math.random() * nodeTypes.length)];
 
 		// Create content based on type and depth
@@ -178,7 +160,7 @@ function generateRandomBoxes(): AppBoxState[] {
 		y: testNode1Position.y,
 		width: 220,
 		height: 180,
-		color: '#FF6B6B',
+		color: defaultColor,
 		content: 'Focus Test Node',
 		type: 'sticky',
 		z: -1 // Background - will zoom in to 1.67x
@@ -197,7 +179,7 @@ function generateRandomBoxes(): AppBoxState[] {
 		y: testNode2Position.y,
 		width: 160,
 		height: 140,
-		color: '#4ECDC4',
+		color: defaultColor,
 		content: 'Front Node',
 		type: 'image',
 		z: 0 // Foreground - will zoom in to 1.5x
@@ -215,7 +197,7 @@ function generateRandomBoxes(): AppBoxState[] {
 		y: testNode3Position.y,
 		width: 180,
 		height: 120,
-		color: '#45B7D1',
+		color: defaultColor,
 		content: 'Another Node',
 		type: 'text',
 		z: 0 // Foreground - will zoom in to 1.5x
@@ -234,7 +216,7 @@ function generateRandomBoxes(): AppBoxState[] {
 		y: boundaryTestPosition.y,
 		width: 200,
 		height: 150,
-		color: '#FF6B9D',
+		color: defaultColor,
 		content: 'Z-Boundary Test (try Cmd+] to hit screen!)',
 		type: 'sticky',
 		z: 0 // At the boundary - perfect for testing
@@ -293,12 +275,35 @@ function generateRandomBoxes(): AppBoxState[] {
 	return sortedBoxes;
 }
 
-let boxes = $state(generateRandomBoxes());
+let boxes = $state([]);
 let selectedBoxId = $state<number | null>(null);
 let lastSelectedBoxId = $state<number | null>(null);
 let draggingBoxId = $state<number | null>(null);
 let ghostedBoxIds = $state<Set<number>>(new Set());
 let boundaryHitBoxId = $state<number | null>(null); // Track which box hit the Z-boundary
+
+// --- On module load, load all nodes from TurtleDB ---
+dbLoadNodes().then(() => {
+	turtleDbStore.subscribe((dbBoxes) => {
+		boxes = dbBoxes.map((node) => ({ ...node }));
+	});
+});
+
+// --- Update addBox, updateBox, deleteBox to use TurtleDB ---
+function addBox(box: AppBoxState) {
+	dbAddNode(box.type, box).then(() => dbLoadNodes());
+}
+
+function updateBox(id: number, partial: Partial<AppBoxState>) {
+	dbUpdateNode(id, partial).then(() => dbLoadNodes());
+}
+
+function deleteBox(id: number) {
+	dbDeleteNode(id).then(() => dbLoadNodes());
+}
+
+// --- Listen for TurtleDB node events and refresh boxes ---
+// (Already handled by turtleDbStore subscription above)
 
 // Store functions
 export const canvasStore = {
@@ -1062,49 +1067,6 @@ export const canvasStore = {
 		console.log(`💥 Box ${boxId} hit the Z-boundary with visual and audio feedback`);
 	},
 
-	// Delete a box from the canvas
-	deleteBox(boxId: number) {
-		const wasFocused = zoomedBoxId === boxId;
-
-		const boxIndex = boxes.findIndex((box) => box.id === boxId);
-		if (boxIndex === -1) return;
-
-		// Remove the box from the array
-		boxes.splice(boxIndex, 1);
-
-		// Clear selection if the deleted box was selected
-		if (selectedBoxId === boxId) {
-			selectedBoxId = null;
-		}
-
-		// Clear last selected if it was this box
-		if (lastSelectedBoxId === boxId) {
-			lastSelectedBoxId = null;
-		}
-
-		// Clear dragging state if this box was being dragged
-		if (draggingBoxId === boxId) {
-			draggingBoxId = null;
-		}
-
-		// Remove from ghosted nodes if it was ghosted
-		if (ghostedBoxIds.has(boxId)) {
-			ghostedBoxIds.delete(boxId);
-			ghostedBoxIds = new Set(ghostedBoxIds); // Trigger reactivity
-		}
-
-		// Exit fullscreen if this box was fullscreen
-		if (fullscreenBoxId === boxId) {
-			this.exitFullscreen();
-		}
-
-		console.log(`🗑️ Deleted box ${boxId}`);
-
-		if (wasFocused) {
-			this.unfocusNode();
-		}
-	},
-
 	// --- New Actions ---
 	toggleAperture() {
 		apertureEnabled = !apertureEnabled;
@@ -1129,51 +1091,14 @@ export const canvasStore = {
 		targetOffsetY = 0;
 		// Log for debugging
 		console.log('🧹 Scene cleared: all boxes removed and state reset');
+	},
+
+	// Delete a box by ID
+	deleteBox(id: number) {
+		deleteBox(id);
 	}
 };
 
 export function toggleAperture() {
 	apertureEnabled = !apertureEnabled;
-}
-
-export function deleteBox(boxId: number) {
-	const wasFocused = zoomedBoxId === boxId;
-
-	const boxIndex = boxes.findIndex((box) => box.id === boxId);
-	if (boxIndex === -1) return;
-
-	// Remove the box from the array
-	boxes.splice(boxIndex, 1);
-
-	// Clear selection if the deleted box was selected
-	if (selectedBoxId === boxId) {
-		selectedBoxId = null;
-	}
-
-	// Clear last selected if it was this box
-	if (lastSelectedBoxId === boxId) {
-		lastSelectedBoxId = null;
-	}
-
-	// Clear dragging state if this box was being dragged
-	if (draggingBoxId === boxId) {
-		draggingBoxId = null;
-	}
-
-	// Remove from ghosted nodes if it was ghosted
-	if (ghostedBoxIds.has(boxId)) {
-		ghostedBoxIds.delete(boxId);
-		ghostedBoxIds = new Set(ghostedBoxIds); // Trigger reactivity
-	}
-
-	// Exit fullscreen if this box was fullscreen
-	if (fullscreenBoxId === boxId) {
-		canvasStore.exitFullscreen();
-	}
-
-	console.log(`🗑️ Deleted box ${boxId}`);
-
-	if (wasFocused) {
-		canvasStore.unfocusNode();
-	}
 }

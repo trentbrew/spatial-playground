@@ -11,6 +11,9 @@ importers:
       '@lucide/svelte':
         specifier: ^0.517.0
         version: 0.517.0(svelte@5.27.0)
+      highlight.js:
+        specifier: ^11.11.1
+        version: 11.11.1
       lucide:
         specifier: ^0.518.0
         version: 0.518.0
@@ -26,6 +29,9 @@ importers:
       quilljs-markdown:
         specifier: ^1.2.0
         version: 1.2.0
+      uuid:
+        specifier: ^11.1.0
+        version: 11.1.0
     devDependencies:
       '@sveltejs/adapter-vercel':
         specifier: ^5.6.3
@@ -915,6 +921,10 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
+  highlight.js@11.11.1:
+    resolution: {integrity: sha512-Xwwo44whKBVCYoliBQwaPvtd/2tYFkRQtXDWj1nackaV2JPXx3L0+Jvd8/qCJ2p+ML0/XVkJ2q+Mr+UVdpJK5w==}
+    engines: {node: '>=12.0.0'}
+
   https-proxy-agent@7.0.6:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
@@ -1352,6 +1362,10 @@ packages:
 
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
+
+  uuid@11.1.0:
+    resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
+    hasBin: true
 
   vfile-message@2.0.4:
     resolution: {integrity: sha512-DjssxRGkMvifUOJre00juHoP9DPWuzjxKuMDrhNbk2TdaYYBNMStsNhEOt3idrtI12VQYM/1+iM0KOzXi4pxwQ==}
@@ -2143,6 +2157,8 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
+  highlight.js@11.11.1: {}
+
   https-proxy-agent@7.0.6:
     dependencies:
       agent-base: 7.1.3
@@ -2486,6 +2502,8 @@ snapshots:
       '@types/unist': 2.0.11
 
   util-deprecate@1.0.2: {}
+
+  uuid@11.1.0: {}
 
   vfile-message@2.0.4:
     dependencies:

@@ -254,12 +254,7 @@
 			!targetElement.closest('.resize-handle') &&
 			!targetElement.closest('.controls-overlay')
 		) {
-			// If a node is currently focused, unfocus it with zoom out feedback
-			if (zoomedBoxId !== null) {
-				canvasStore.unfocusNode();
-			}
-
-			// Deselect the current box, no dimensions needed for deselect
+			// Simply deselect the current box without any zoom changes
 			canvasStore.selectBox(null);
 		}
 	}
@@ -448,8 +443,8 @@
 	}
 
 	function getRandomColor(): string {
-		const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57', '#ff9ff3', '#54a0ff'];
-		return colors[Math.floor(Math.random() * colors.length)];
+		// Use consistent dark gray for all nodes
+		return '#2a2a2a';
 	}
 
 	function zoomToFitAll() {
@@ -740,7 +735,7 @@
 		height: 100%;
 		position: relative;
 		overflow: hidden;
-		background-color: var(--canvas-bg);
+		background-color: var(--bg-canvas-color);
 		cursor: grab;
 		outline: none; /* Remove focus outline */
 	}

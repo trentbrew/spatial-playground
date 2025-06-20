@@ -28,7 +28,8 @@
 		Copy,
 		ArrowUp,
 		ArrowDown,
-		Trash
+		Trash,
+		GripVertical
 	} from 'lucide-svelte';
 
 	// Icon mapping for node types
@@ -61,6 +62,12 @@
 		return () => {
 			unsubscribeViewport?.();
 			unsubHeight();
+			// Cleanup drag listeners if component is destroyed while dragging
+			if (isDragging) {
+				document.removeEventListener('pointermove', handleDragMove);
+				document.removeEventListener('pointerup', handleDragEnd);
+				document.removeEventListener('pointercancel', handleDragEnd);
+			}
 		};
 	});
 
@@ -110,7 +117,7 @@
 		const isAlreadyFocused =
 			selectedBoxId === box.id && zoomedBoxId === box.id && currentZoom >= focusZoom * 0.95; // add tolerance
 
-		if (isAlreadyFocused) {
+		if (isAlreadyFocused && !isGhosted) {
 			// If already focused, don't zoom - just allow interaction with content
 			console.log(`[NodeContainer] Box ${box.id} already focused, allowing content interaction`);
 			return;
@@ -136,7 +143,7 @@
 		}
 
 		// A double click will now restore the previous zoom level (zoom out)
-		canvasStore.restorePreviousZoom();
+		// canvasStore.restorePreviousZoom();
 	}
 
 	function handleRightClick(event: MouseEvent) {
@@ -235,6 +242,70 @@
 		event.stopPropagation();
 		showSettingsBack = false;
 	}
+
+	// Drag handle implementation
+	let isDragging = false;
+	let dragStartX = 0;
+	let dragStartY = 0;
+	let initialBoxX = 0;
+	let initialBoxY = 0;
+
+	function handleDragStart(event: PointerEvent) {
+		if (event.button !== 0 && event.pointerType === 'mouse') return;
+		if (fullscreenBoxId !== null) return;
+
+		console.log('Drag started for box:', box.id);
+
+		// Store initial positions
+		dragStartX = event.clientX;
+		dragStartY = event.clientY;
+		initialBoxX = box.x;
+		initialBoxY = box.y;
+		isDragging = true;
+
+		// Capture pointer events
+		const dragHandle = event.currentTarget as HTMLElement;
+		dragHandle.setPointerCapture(event.pointerId);
+
+		// Add event listeners
+		document.addEventListener('pointermove', handleDragMove);
+		document.addEventListener('pointerup', handleDragEnd);
+		document.addEventListener('pointercancel', handleDragEnd);
+
+		event.stopPropagation();
+		event.preventDefault();
+	}
+
+	function handleDragMove(event: PointerEvent) {
+		if (!isDragging) return;
+
+		const dx = (event.clientX - dragStartX) / canvasStore.zoom;
+		const dy = (event.clientY - dragStartY) / canvasStore.zoom;
+
+		// Update box position directly without triggering selection/zoom
+		canvasStore.updateBox(box.id, {
+			x: initialBoxX + dx,
+			y: initialBoxY + dy
+		});
+	}
+
+	function handleDragEnd(event: PointerEvent) {
+		if (!isDragging) return;
+
+		console.log('Drag ended for box:', box.id);
+		isDragging = false;
+
+		// Remove event listeners
+		document.removeEventListener('pointermove', handleDragMove);
+		document.removeEventListener('pointerup', handleDragEnd);
+		document.removeEventListener('pointercancel', handleDragEnd);
+
+		// Release pointer capture
+		const dragHandle = containerElement?.querySelector('.drag-handle') as HTMLElement;
+		if (dragHandle) {
+			dragHandle.releasePointerCapture(event.pointerId);
+		}
+	}
 </script>
 
 <div
@@ -298,6 +369,10 @@
 						width: auto;
 						flex: 1 1 auto;
 						white-space: nowrap;
+						outline: none !important;
+						box-shadow: none !important;
+						box-sizing: border-box;
+
 						overflow: hidden;
 						text-overflow: ellipsis;
 						opacity: 1;
@@ -333,6 +408,19 @@
 				isFullscreen={fullscreenBoxId === box.id}
 				isFocused={zoomedBoxId === box.id}
 			/>
+
+			<!-- Drag Handle (always visible but subtle) -->
+			{#if !fullscreenBoxId}
+				<div
+					class="drag-handle"
+					onpointerdown={handleDragStart}
+					title="Drag to move"
+					aria-label="Drag to move node"
+				>
+					<GripVertical class="h-4 w-4 opacity-30" />
+				</div>
+			{/if}
+
 			{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
 				<div
 					class="resize-handle handle-se"
@@ -367,7 +455,7 @@
 			{/if}
 		</div>
 		<!-- BACK: Settings/properties -->
-		<div class="flip-back">
+		<div class="flip-back !overflow-auto">
 			<div class="settings-header">
 				<button
 					class="node-close back-arrow"
@@ -432,17 +520,30 @@
 		perspective: 1200px;
 	}
 	.drag-handle {
-		width: 100%;
-		height: var(--handle-height);
-		background-color: var(--handle-bg-color);
+		position: absolute;
+		bottom: -12px;
+		left: 50%;
+		transform: translateX(-50%);
+		width: 60px;
+		height: 24px;
+		background-color: rgba(60, 60, 60, 0.8);
+		border: 1px solid rgba(120, 120, 120, 0.6);
+		border-radius: 12px;
 		cursor: move;
-		flex-shrink: 0;
-		border-radius: 8px 8px 0px 0px;
-		position: relative;
 		display: flex;
 		align-items: center;
-		justify-content: flex-end;
-		padding-right: 8px;
+		justify-content: center;
+		z-index: 15;
+		opacity: 0.7;
+		transition: all 0.2s ease;
+		backdrop-filter: blur(4px);
+	}
+
+	.drag-handle:hover {
+		opacity: 1;
+		background-color: rgba(80, 80, 80, 0.9);
+		border-color: rgba(140, 140, 140, 0.8);
+		transform: translateX(-50%) scale(1.05);
 	}
 
 	.close-button {

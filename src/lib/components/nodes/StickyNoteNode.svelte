@@ -4,6 +4,7 @@
 	import { getTextColorForBackground } from '$lib/utils/colorUtils';
 	import { browser } from '$app/environment';
 	import { fade } from 'svelte/transition';
+	import QuillEditor from '$lib/components/QuillEditor.svelte';
 
 	// Use $props() rune for component props
 	let {
@@ -46,15 +47,14 @@
 	];
 
 	function handleColorSelect(newColor: string) {
-		const foregroundColor = getTextColorForBackground(newColor);
-		canvasStore.updateBox(id, { color: newColor, foregroundColor });
+		canvasStore.updateBox(id, { color: newColor });
 		showColorPalette = false; // Hide palette after selection
 	}
 
 	// Handle content that might be a string or an object
 	let textContent = $state('');
 	let useQuillEditor = $state(false);
-	let QuillEditor = $state<any>(null);
+	let QuillEditorComponent = $state<any>(null);
 
 	$effect(() => {
 		if (typeof content === 'string') {
@@ -68,14 +68,17 @@
 	$effect(() => {
 		if (browser) {
 			import('../QuillEditor.svelte').then((module) => {
-				QuillEditor = module.default;
+				QuillEditorComponent = module.default;
 				useQuillEditor = true;
 			});
 		}
 	});
 
-	// Use a static text color for better readability with custom backgrounds
-	const contrastingTextColor = '#181818';
+	// Calculate text color based on background - reactive to color changes
+	let textColor = $state('');
+	$effect(() => {
+		textColor = getTextColorForBackground(color);
+	});
 
 	// Handle content changes from Quill editor
 	function handleContentChange(event: CustomEvent<{ text: string; delta: any }>) {
@@ -101,16 +104,15 @@
 		<div class="editor-container">
 			{#if useQuillEditor && QuillEditor}
 				<!-- Use Quill Editor when available -->
-				<QuillEditor
+				<QuillEditorComponent
 					{content}
 					{isFocused}
 					showColorButton={true}
 					on:colorpick={() => (showColorPalette = !showColorPalette)}
 					onContentChange={handleContentChange}
 					placeholder="Start writing..."
-					foregroundColor={color && box.foregroundColor
-						? box.foregroundColor
-						: getTextColorForBackground(color)}
+					foregroundColor={textColor}
+					toolbarIconColor={textColor}
 				/>
 			{:else}
 				<!-- Fallback for SSR or if Quill fails -->
@@ -119,7 +121,7 @@
 					oninput={handleTextareaChange}
 					placeholder="Start writing..."
 					class="fallback-textarea"
-					style:color={contrastingTextColor}
+					style:color={textColor}
 				></textarea>
 			{/if}
 		</div>

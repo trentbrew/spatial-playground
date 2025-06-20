@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import type { AppBoxState } from '$lib/canvasState';
+	import { MAX_NODE_WIDTH, MAX_NODE_HEIGHT } from '$lib/constants';
 	import ThemeToggle from './ThemeToggle.svelte'; // Assuming this exists
 
 	// Direct access to store properties (reactive)
@@ -52,23 +53,14 @@
 	}
 
 	function handleAddBox() {
-		const colors = [
-			'#FF6B6B',
-			'#4ECDC4',
-			'#45B7D1',
-			'#96CEB4',
-			'#FECA57',
-			'#FF9FF3',
-			'#54A0FF',
-			'#5F27CD',
-			'#00D2D3',
-			'#FF9F43'
-		];
 		const nodeTypes = ['sticky', 'image', 'text', 'code'] as const;
+
+		// Use consistent dark gray for all nodes
+		const defaultColor = '#2a2a2a';
 
 		// Create a new box with random properties
 		const newId = Math.max(...boxes.map((b) => b.id), 0) + 1;
-		const color = colors[Math.floor(Math.random() * colors.length)];
+		const color = defaultColor;
 		const type = nodeTypes[Math.floor(Math.random() * nodeTypes.length)];
 		const width = Math.min(150 + Math.random() * 100, MAX_NODE_WIDTH);
 		const height = Math.min(120 + Math.random() * 80, MAX_NODE_HEIGHT);

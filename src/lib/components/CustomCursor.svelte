@@ -28,11 +28,11 @@
 		velocityR: 0
 	};
 
-	// Enhanced spring physics parameters with different rates for different properties
+	// Enhanced spring physics parameters with toned down bounciness
 	const PHYSICS = {
-		position: { stiffness: 0.18, damping: 0.75, mass: 1 },
-		size: { stiffness: 0.22, damping: 0.8, mass: 1 },
-		rotation: { stiffness: 0.15, damping: 0.85, mass: 1 }
+		position: { stiffness: 0.25, damping: 0.9, mass: 1 },
+		size: { stiffness: 0.3, damping: 0.9, mass: 1 },
+		rotation: { stiffness: 0.2, damping: 0.95, mass: 1 }
 	};
 
 	// Enhanced squish parameters

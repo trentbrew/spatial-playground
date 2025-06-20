@@ -43,6 +43,7 @@
 		"lucide-svelte": "^0.518.0",
 		"marked": "^15.0.12",
 		"quill": "^2.0.3",
-		"quilljs-markdown": "^1.2.0"
+		"quilljs-markdown": "^1.2.0",
+		"uuid": "^11.1.0"
 	}
 }

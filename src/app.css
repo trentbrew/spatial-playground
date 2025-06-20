@@ -6,6 +6,7 @@
 
 * {
 	font-family: 'JetBrains Mono', monospace;
+	cursor: none !important;
 }
 
 /* Define global CSS variables for themes */

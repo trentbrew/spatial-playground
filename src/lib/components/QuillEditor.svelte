@@ -16,6 +16,7 @@
 	let isInitialized = false;
 	let isQuillLoaded = false;
 	let initError = null;
+	let hasTextSelection = false;
 
 	// Fallback textarea for SSR and error states
 	let fallbackTextarea;
@@ -135,6 +136,17 @@
 				}
 			});
 
+			// Handle selection changes to track if text is selected
+			quill.on('selection-change', (range) => {
+				try {
+					// hasTextSelection is true when there's a range with length > 0
+					// When clicking elsewhere or losing focus, range becomes null
+					hasTextSelection = range && range.length > 0;
+				} catch (error) {
+					console.warn('Error handling selection change:', error);
+				}
+			});
+
 			isQuillLoaded = true;
 		} catch (error) {
 			console.error('Error initializing Quill:', error);
@@ -147,6 +159,17 @@
 	function handleFallbackInput(event) {
 		const text = event.target.value;
 		onContentChange({ text, delta: null });
+	}
+
+	// Handle fallback textarea selection changes
+	function handleFallbackSelection(event) {
+		const textarea = event.target;
+		hasTextSelection = textarea.selectionStart !== textarea.selectionEnd;
+	}
+
+	// Handle fallback textarea focus loss
+	function handleFallbackBlur() {
+		hasTextSelection = false;
 	}
 
 	onMount(() => {
@@ -189,13 +212,22 @@
 	{/if}
 </svelte:head>
 
-<div class="editor-wrapper" class:focused={isFocused} style="--foreground-color: {foregroundColor}">
+<div
+	class="editor-wrapper"
+	class:focused={isFocused}
+	class:has-selection={hasTextSelection}
+	style="--foreground-color: {foregroundColor}"
+>
 	{#if !browser || initError}
 		<!-- Fallback textarea for SSR or error states -->
 		<textarea
 			bind:this={fallbackTextarea}
 			bind:value={fallbackContent}
 			on:input={handleFallbackInput}
+			on:select={handleFallbackSelection}
+			on:mouseup={handleFallbackSelection}
+			on:keyup={handleFallbackSelection}
+			on:blur={handleFallbackBlur}
 			{placeholder}
 			class="fallback-editor"
 		></textarea>
@@ -217,6 +249,7 @@
 
 <style>
 	.editor-wrapper {
+		padding: 4px;
 		width: 100%;
 		height: 100%;
 		position: relative;
@@ -287,9 +320,9 @@
 		justify-content: center;
 		z-index: 100;
 		border: none !important;
-		/* border-radius: 8px; */
+		border-radius: 8px;
 		/* border-top: 1px solid rgba(255, 255, 255, 0.1) !important; */
-		background: rgba(33, 33, 33, 0) !important;
+		background: rgba(0, 0, 0, 0) !important;
 		padding: 16px 0px 16px 0px !important;
 		border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
 		opacity: 0;
@@ -301,10 +334,10 @@
 		color: var(--foreground-color, #181818) !important;
 	}
 
-	:global(.focused .ql-toolbar) {
+	:global(.focused.has-selection .ql-toolbar) {
 		opacity: 1;
 		visibility: visible;
-		background: rgba(0, 0, 0, 0.18) !important;
+		background: rgba(0, 0, 0, 1) !important;
 		box-shadow: none !important;
 	}
 

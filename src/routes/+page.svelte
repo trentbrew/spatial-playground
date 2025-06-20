@@ -1,5 +1,6 @@
 <script lang="ts">
 	import CanvasViewport from '$lib/components/CanvasViewport.svelte';
+	import FloatingDock from '$lib/components/FloatingDock.svelte';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import { getFocusZoomForZ, getIntrinsicScaleFactor, getParallaxFactor } from '$lib/utils/depth';
 	import { onMount } from 'svelte';
@@ -87,3 +88,4 @@
 </script>
 
 <CanvasViewport />
+<FloatingDock />
