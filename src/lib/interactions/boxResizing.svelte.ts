@@ -2,8 +2,8 @@ import type { Action } from 'svelte/action';
 import { canvasStore } from '$lib/stores/canvasStore.svelte';
 
 // Minimum dimensions for a box
-const MIN_WIDTH = 100;
-const MIN_HEIGHT = 50;
+const MIN_WIDTH = 360;
+const MIN_HEIGHT = 270;
 
 export const boxResizing: Action<HTMLElement, number> = (node, boxId) => {
 	let isResizing = false;

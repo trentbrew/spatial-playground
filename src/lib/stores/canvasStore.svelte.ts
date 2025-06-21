@@ -65,23 +65,67 @@ function boxesOverlap(
 	);
 }
 
-// Find a non-overlapping position for a box at a specific Z level
+// Improved grid-based collision detection for better node placement
 function findNonOverlappingPosition(
 	targetBox: { width: number; height: number; z: number },
 	existingBoxes: AppBoxState[],
-	maxAttempts: number = 50,
-	padding: number = 50
+	maxAttempts: number = 100,
+	padding: number = 60
 ): { x: number; y: number } {
-	const sameZBoxes = existingBoxes.filter((box) => box.z === targetBox.z);
+	// Check overlaps across ALL Z-levels for visual clarity
+	const allBoxes = existingBoxes;
 
+	// Try a grid-based approach first for better distribution
+	const gridSize = 300; // Grid cell size
+	const gridCols = 20; // 20 columns
+	const gridRows = 15; // 15 rows
+	const startX = -3000; // Start from left edge
+	const startY = -2250; // Start from top edge
+
+	// Create a list of grid positions and shuffle them for variety
+	const gridPositions: { x: number; y: number }[] = [];
+	for (let row = 0; row < gridRows; row++) {
+		for (let col = 0; col < gridCols; col++) {
+			const x = startX + col * gridSize + Math.random() * 100 - 50; // Add some jitter
+			const y = startY + row * gridSize + Math.random() * 100 - 50; // Add some jitter
+			gridPositions.push({ x, y });
+		}
+	}
+
+	// Shuffle the grid positions for variety
+	for (let i = gridPositions.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[gridPositions[i], gridPositions[j]] = [gridPositions[j], gridPositions[i]];
+	}
+
+	// First try grid positions
+	for (const position of gridPositions) {
+		const testPosition = {
+			x: position.x,
+			y: position.y,
+			width: targetBox.width,
+			height: targetBox.height
+		};
+
+		// Check if this position overlaps with any existing box across all Z-levels
+		const hasOverlap = allBoxes.some((existingBox) =>
+			boxesOverlap(testPosition, existingBox, padding)
+		);
+
+		if (!hasOverlap) {
+			return { x: Math.round(position.x), y: Math.round(position.y) };
+		}
+	}
+
+	// If grid approach fails, try random positions with increased attempts
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		const x = (Math.random() - 0.5) * 4000; // X from -2000 to +2000
-		const y = (Math.random() - 0.5) * 3000; // Y from -1500 to +1500
+		const x = (Math.random() - 0.5) * 5000; // Expanded X range: -2500 to +2500
+		const y = (Math.random() - 0.5) * 4000; // Expanded Y range: -2000 to +2000
 
 		const testPosition = { x, y, width: targetBox.width, height: targetBox.height };
 
-		// Check if this position overlaps with any existing box at the same Z level
-		const hasOverlap = sameZBoxes.some((existingBox) =>
+		// Check if this position overlaps with any existing box across all Z-levels
+		const hasOverlap = allBoxes.some((existingBox) =>
 			boxesOverlap(testPosition, existingBox, padding)
 		);
 
@@ -90,136 +134,181 @@ function findNonOverlappingPosition(
 		}
 	}
 
-	// Fallback: if we can't find a non-overlapping position, place it anyway
-	// but log a warning
-	console.warn(
-		`⚠️ Could not find non-overlapping position for Z${targetBox.z} box after ${maxAttempts} attempts`
-	);
-	return {
-		x: Math.round((Math.random() - 0.5) * 4000),
-		y: Math.round((Math.random() - 0.5) * 3000)
-	};
+	// Enhanced fallback: try to find the least overlapping position
+	let bestPosition = { x: 0, y: 0 };
+	let minOverlaps = Infinity;
+
+	for (let attempt = 0; attempt < 50; attempt++) {
+		const x = (Math.random() - 0.5) * 6000; // Even wider range for fallback
+		const y = (Math.random() - 0.5) * 5000;
+
+		const testPosition = { x, y, width: targetBox.width, height: targetBox.height };
+
+		// Count overlaps for this position
+		const overlapCount = allBoxes.filter((existingBox) =>
+			boxesOverlap(testPosition, existingBox, padding)
+		).length;
+
+		if (overlapCount < minOverlaps) {
+			minOverlaps = overlapCount;
+			bestPosition = { x: Math.round(x), y: Math.round(y) };
+		}
+
+		// If we found a position with minimal overlaps, use it
+		if (overlapCount <= 1) break;
+	}
+
+	if (minOverlaps > 0) {
+		console.warn(
+			`⚠️ Could not find completely non-overlapping position for Z${targetBox.z} box, using position with ${minOverlaps} overlaps`
+		);
+	}
+
+	return bestPosition;
+}
+
+// Helper function to load an image and get its dimensions
+function loadImageDimensions(src: string): Promise<{ width: number; height: number }> {
+	return new Promise((resolve, reject) => {
+		const img = new Image();
+		img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+		img.onerror = () => {
+			console.warn(`Failed to load image: ${src}`);
+			// Fallback to a default aspect ratio if image fails to load
+			resolve({ width: 400, height: 300 });
+		};
+		img.src = src;
+	});
 }
 
 // Generate a rich, multi-layered scene with varied nodes and no overlaps per Z-level
-function generateRandomBoxes(): AppBoxState[] {
+async function generateRandomBoxes(): Promise<AppBoxState[]> {
 	// Use consistent dark gray for all nodes
 	const defaultColor = '#2a2a2a';
 
-	const nodeTypes = ['sticky', 'image', 'embed', 'text', 'code'];
+	// List of all artwork files in the assets/artwork directory
+	const artworkFiles = [
+		'20220206_110313.jpg',
+		'a-good-day.png',
+		'alien.jpg',
+		'an.png',
+		'angel.jpg',
+		'bot.png',
+		'brewcrewtew.png',
+		'buds.png',
+		'clipprs.png',
+		'dancer.png',
+		'digest.jpg',
+		'efervesence.png',
+		'halfpipe.png',
+		'haus Medium.png',
+		'haus.png',
+		'her Medium Small.png',
+		'her.jpg',
+		'her2.png',
+		'hug.jpg',
+		'IMG_0191.jpg',
+		'IMG_0292.PNG',
+		'IMG_0293.PNG',
+		'IMG_0294.PNG',
+		'IMG_0779.webp',
+		'isabella.jpg',
+		'jazz.jpg',
+		'overcast Medium.png',
+		'overcast.png',
+		'point.png',
+		'point2.png',
+		'progress.jpg',
+		'scholar.jpg',
+		'skateboard.jpg',
+		'sonic.jpg',
+		'spill.jpg',
+		'spill (1).jpg',
+		'stares.jpg',
+		'strand.jpg',
+		'string_invert_2.png',
+		'strings_invert.png',
+		'summer18.jpg',
+		'symmetry.png',
+		'thedaancer.png',
+		'Untitled_Artwork.png',
+		'uptime2.png',
+		'weight.jpg'
+	];
+
 	const boxes: AppBoxState[] = [];
 
-	// Create a diverse set of nodes across different depths with collision avoidance
-	for (let i = 1; i <= 25; i++) {
+	// Load all images and get their dimensions
+	console.log('🖼️ Loading image dimensions for aspect ratio matching...');
+	const imageDataPromises = artworkFiles.map(async (filename, index) => {
+		const imagePath = `/artwork/${filename}`;
+		const dimensions = await loadImageDimensions(imagePath);
+		return { filename, imagePath, dimensions, index };
+	});
+
+	const imageDataArray = await Promise.all(imageDataPromises);
+	console.log(`📐 Loaded dimensions for ${imageDataArray.length} images`);
+
+	// Create image nodes for each artwork file with correct aspect ratios
+	imageDataArray.forEach(({ filename, imagePath, dimensions, index }) => {
+		const id = index + 1;
+
+		// Distribute across different Z depths for visual interest
 		const z = Math.floor(Math.random() * 4) - 3; // Z from -3 to 0
 
-		// Vary sizes based on depth for visual interest
-		const baseSize = z >= 0 ? 180 + Math.random() * 120 : 150 + Math.random() * 100;
-		const width = baseSize + Math.random() * 80;
-		const height = baseSize + Math.random() * 60;
+		// Calculate dimensions based on depth and actual image aspect ratio
+		// Deeper items (negative Z) are slightly smaller, foreground items larger
+		const baseSize = z >= 0 ? 400 + Math.random() * 200 : 360 + Math.random() * 150;
 
-		// Find a non-overlapping position for this box
+		// Use the actual aspect ratio of the image
+		const actualAspectRatio = dimensions.width / dimensions.height;
+
+		// Determine final dimensions while maintaining aspect ratio
+		let finalWidth, finalHeight;
+
+		if (actualAspectRatio > 1) {
+			// Landscape: width is the limiting factor
+			finalWidth = Math.round(baseSize);
+			finalHeight = Math.round(baseSize / actualAspectRatio);
+		} else {
+			// Portrait or square: height is the limiting factor
+			finalHeight = Math.round(baseSize);
+			finalWidth = Math.round(baseSize * actualAspectRatio);
+		}
+
+		// Ensure dimensions stay within reasonable bounds
+		finalWidth = Math.min(Math.max(finalWidth, 360), 800);
+		finalHeight = Math.min(Math.max(finalHeight, 270), 600);
+
+		// If we hit the bounds, recalculate to maintain aspect ratio
+		if (finalWidth === 360 || finalWidth === 800) {
+			finalHeight = Math.round(finalWidth / actualAspectRatio);
+			finalHeight = Math.min(Math.max(finalHeight, 270), 600);
+		}
+		if (finalHeight === 270 || finalHeight === 600) {
+			finalWidth = Math.round(finalHeight * actualAspectRatio);
+			finalWidth = Math.min(Math.max(finalWidth, 360), 800);
+		}
+
+		// Find a non-overlapping position for this image
 		const position = findNonOverlappingPosition(
-			{ width: Math.round(width), height: Math.round(height), z },
+			{ width: finalWidth, height: finalHeight, z },
 			boxes,
-			50, // max attempts
-			50 // padding between boxes (increased for better spacing)
+			100, // max attempts (increased)
+			80 // padding between images (increased for better spacing)
 		);
 
-		const color = defaultColor;
-		const type = nodeTypes[Math.floor(Math.random() * nodeTypes.length)];
-
-		// Create content based on type and depth
-		let content = `${type.charAt(0).toUpperCase() + type.slice(1)} ${i}`;
-		if (z < 0) content += ` (Depth ${Math.abs(z)})`;
-
 		boxes.push({
-			id: i,
+			id,
 			x: position.x,
 			y: position.y,
-			width: Math.round(width),
-			height: Math.round(height),
-			color,
-			content,
-			type: type as 'sticky' | 'image' | 'embed' | 'text' | 'code',
+			width: finalWidth,
+			height: finalHeight,
+			color: defaultColor,
+			content: imagePath, // Use the image path as content
+			type: 'image',
 			z
 		});
-	}
-
-	// Add a few strategic test nodes - all using collision avoidance
-	// Background test node (non-overlapping)
-	const testNode1Position = findNonOverlappingPosition(
-		{ width: 220, height: 180, z: -1 },
-		boxes,
-		50,
-		50
-	);
-	boxes.push({
-		id: 26,
-		x: testNode1Position.x,
-		y: testNode1Position.y,
-		width: 220,
-		height: 180,
-		color: defaultColor,
-		content: 'Focus Test Node',
-		type: 'sticky',
-		z: -1 // Background - will zoom in to 1.67x
-	});
-
-	// Foreground test nodes (using collision avoidance)
-	const testNode2Position = findNonOverlappingPosition(
-		{ width: 160, height: 140, z: 0 },
-		boxes,
-		50,
-		50
-	);
-	boxes.push({
-		id: 27,
-		x: testNode2Position.x,
-		y: testNode2Position.y,
-		width: 160,
-		height: 140,
-		color: defaultColor,
-		content: 'Front Node',
-		type: 'image',
-		z: 0 // Foreground - will zoom in to 1.5x
-	});
-
-	const testNode3Position = findNonOverlappingPosition(
-		{ width: 180, height: 120, z: 0 },
-		boxes,
-		50,
-		50
-	);
-	boxes.push({
-		id: 28,
-		x: testNode3Position.x,
-		y: testNode3Position.y,
-		width: 180,
-		height: 120,
-		color: defaultColor,
-		content: 'Another Node',
-		type: 'text',
-		z: 0 // Foreground - will zoom in to 1.5x
-	});
-
-	// Add a special test node at Z=0 for testing boundary hit
-	const boundaryTestPosition = findNonOverlappingPosition(
-		{ width: 200, height: 150, z: 0 },
-		boxes,
-		50,
-		50
-	);
-	boxes.push({
-		id: 29,
-		x: boundaryTestPosition.x,
-		y: boundaryTestPosition.y,
-		width: 200,
-		height: 150,
-		color: defaultColor,
-		content: 'Z-Boundary Test (try Cmd+] to hit screen!)',
-		type: 'sticky',
-		z: 0 // At the boundary - perfect for testing
 	});
 
 	const sortedBoxes = boxes.sort((a, b) => a.z - b.z); // Sort by z-index for proper rendering
@@ -231,7 +320,7 @@ function generateRandomBoxes(): AppBoxState[] {
 	});
 
 	console.log(
-		`🎨 Generated ${sortedBoxes.length} nodes across depths (Z-3 to Z0):`,
+		`🖼️ Generated ${sortedBoxes.length} artwork images with natural aspect ratios across depths (Z-3 to Z0):`,
 		Array.from(depthCounts.entries())
 			.map(([z, count]) => `Z${z}: ${count}`)
 			.join(', ')
@@ -877,12 +966,15 @@ export const canvasStore = {
 	},
 
 	// Regenerate the scene with new random nodes
-	regenerateScene() {
-		boxes = generateRandomBoxes();
+	async regenerateScene() {
+		console.log('🖼️ Starting artwork gallery generation...');
+		boxes = await generateRandomBoxes();
 		selectedBoxId = null;
 		lastSelectedBoxId = null;
 		draggingBoxId = null;
-		console.log(`🎲 Generated ${boxes.length} new nodes across depths Z-3 to Z0`);
+		console.log(
+			`🎨 Generated ${boxes.length} artwork images with natural aspect ratios across depths Z-3 to Z0`
+		);
 	},
 
 	// Set dragging state for parallax suspension

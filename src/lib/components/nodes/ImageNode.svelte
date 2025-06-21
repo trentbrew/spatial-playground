@@ -7,7 +7,7 @@
 </script>
 
 <div id={String(id)} class="image-node">
-	{#if content && (content.match(/^(https?:)?\/\//) || content.startsWith('data:image/'))}
+	{#if content && (content.match(/^(https?:)?\/\//) || content.startsWith('data:image/') || content.startsWith('/'))}
 		<img src={content} alt="Image node {id}" />
 	{:else}
 		<div class="placeholder">

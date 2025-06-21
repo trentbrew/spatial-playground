@@ -92,9 +92,21 @@
 					content = 'New content';
 			}
 
-			// Calculate node dimensions
-			const width = randomType === 'code' ? 300 : 200;
-			const height = randomType === 'code' ? 200 : 150;
+			// Calculate node dimensions based on type
+			let width, height;
+			switch (randomType) {
+				case 'code':
+					width = 500;
+					height = 300;
+					break;
+				case 'embed':
+					width = 800;
+					height = 450;
+					break;
+				default:
+					width = 400;
+					height = 400;
+			}
 
 			const newBox: AppBoxState = {
 				id: Date.now(), // Temporary ID, will be replaced by TurtleDB

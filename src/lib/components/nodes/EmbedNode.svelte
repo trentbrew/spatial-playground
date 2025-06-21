@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
-	import { Globe } from '@lucide/svelte';
+	import { Lock } from 'lucide-svelte';
+	// Note: Icons not needed since we're using emoji
 
 	// Use $props() rune for component props
 	let {
@@ -98,9 +99,9 @@
 					spellcheck="false"
 					data-cursor="ignore"
 				/>
-				<button onclick={handleUrlSubmit} class="submit-btn" disabled={!urlInput.trim()}>
+				<!-- <button onclick={handleUrlSubmit} class="submit-btn" disabled={!urlInput.trim()}>
 					→
-				</button>
+				</button> -->
 			</div>
 			<!-- <div class="hint">Press Enter to load</div> -->
 		</div>
@@ -119,21 +120,20 @@
 						spellcheck="false"
 						data-cursor="ignore"
 					/>
-					<button onclick={handleUrlSubmit} class="submit-btn">✓</button>
-					<button onclick={() => (isEditingUrl = false)} class="cancel-btn">✕</button>
+					<!-- <button onclick={handleUrlSubmit} class="submit-btn">✓</button>
+					<button onclick={() => (isEditingUrl = false)} class="cancel-btn">✕</button> -->
 				{:else}
 					<div
 						class="url-display"
 						onclick={startEditing}
 						onkeydown={(e) => e.key === 'Enter' && startEditing()}
-						role="button"
 						tabindex="0"
 						title="Click to edit URL"
 					>
-						<span class="protocol">🔒</span>
+						<span class="protocol"><Lock class="mr-2 h-4 w-4" /></span>
 						<span class="domain">{getDomainFromUrl(content)}</span>
 					</div>
-					<button onclick={startEditing} class="edit-btn" title="Edit URL">⚡</button>
+					<!-- <button onclick={startEditing} class="edit-btn" title="Edit URL">⚡</button> -->
 				{/if}
 			</div>
 
@@ -211,7 +211,7 @@
 		padding: 10px 12px;
 		border: 2px solid rgba(255, 255, 255, 0.2);
 		border-radius: 6px;
-		/* background: rgba(255, 255, 255, 0.1); */
+		background: transparent;
 		color: white;
 		font-size: 14px;
 		outline: none;
@@ -220,7 +220,7 @@
 
 	.url-input:focus {
 		border-color: rgba(255, 255, 255, 0.4);
-		/* background: rgba(255, 255, 255, 0.15); */
+		background: transparent;
 	}
 
 	.url-input.initial {

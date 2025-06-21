@@ -2,8 +2,10 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
+	import { boxDragging } from '$lib/interactions/boxDragging.svelte.ts';
 
 	let cursorElement: HTMLDivElement;
+	let trailElements: HTMLDivElement[] = [];
 	let hoverContext: { type: string; rect: DOMRect } | null = null;
 	let defaultCursorSize = 20;
 	let isDragging = false;
@@ -13,6 +15,18 @@
 	const mousePosition = { x: 0, y: 0 };
 	let cursorPosition = { x: 0, y: 0 };
 	let lastMousePosition = { x: 0, y: 0 };
+
+	// Trail configuration
+	const TRAIL_CONFIG = {
+		length: 8,
+		spacing: 12,
+		sizeDecay: 0.85,
+		opacityDecay: 0.7,
+		delay: 0.15
+	};
+
+	// Trail state
+	let trailPositions: Array<{ x: number; y: number; size: number; opacity: number }> = [];
 
 	// Enhanced spring state with rotation and more properties
 	let spring = {
@@ -44,6 +58,7 @@
 
 	// Reactive state for focus detection
 	const zoomedBoxId = $derived(canvasStore.zoomedBoxId);
+	const isBoxDragging = $derived(boxDragging.isDragging);
 
 	// Mouse velocity calculation for enhanced effects
 	let mouseVelocity = { x: 0, y: 0, magnitude: 0 };
@@ -95,8 +110,8 @@
 	}
 
 	function getCursorTarget() {
-		// Scale down the cursor on mousedown
-		const scaleDown = isMouseDown ? 0.5 : 1;
+		// Hide the cursor completely on mousedown or when box dragging is active
+		const scaleDown = isMouseDown || isBoxDragging ? 0 : 1;
 
 		// Enhanced dragging state with slight size increase
 		if (isDragging) {
@@ -254,7 +269,10 @@
 
 		cursorElement.style.width = `${width}px`;
 		cursorElement.style.height = `${height}px`;
-		// cursorElement.style.opacity = isVisible ? '1' : '0';
+
+		// Set opacity based on visibility and box dragging state
+		cursorElement.style.opacity = isVisible && !isBoxDragging ? '1' : '0';
+
 		// Handle cursor shrinking when hovering over text inputs or editors
 		if (hoverContext?.type === 'text-input' || hoverContext?.type === 'editor') {
 			cursorElement.style.width = '2px';
@@ -423,9 +441,11 @@
 			{ selector: 'button:not([data-cursor]), [role="button"]:not([data-cursor])', type: 'button' },
 			{ selector: '[data-cursor="button"]', type: 'button' },
 			{
-				selector: 'input[type="text"], input[type="email"], input[type="password"], textarea',
+				selector:
+					'input[type="text"], input[type="email"], input[type="password"], textarea:not([data-cursor="ignore"])',
 				type: 'input'
 			},
+			{ selector: '.code-editor[data-cursor="ignore"]', type: 'ignore' },
 			{ selector: '[data-cursor="drag"]', type: 'drag' },
 			{ selector: '[data-cursor="resize"]', type: 'resize' },
 			{ selector: '[data-cursor="close-button"]', type: 'close-button' },

@@ -323,8 +323,8 @@
 	class:boundary-hit={isBoundaryHit}
 	class:non-clickable={!isClickable && !isGhosted}
 	class:pinned={isPinned}
-	style:width="{Math.max(box.width, 360)}px"
-	style:height="{Math.max(box.height, 360)}px"
+	style:width="{box.width}px"
+	style:height="{box.height}px"
 	style:--z-brightness={box.z * 0.05}
 	style:--focus-transition-duration="{FOCUS_TRANSITION_DURATION}ms"
 	style:z-index={fullscreenBoxId === box.id
@@ -338,7 +338,7 @@
 		? 'none'
 		: fullscreenBoxId !== null && box.id !== fullscreenBoxId
 			? 'none'
-			: !isClickable
+			: !isClickable && selectedBoxId !== box.id
 				? 'none'
 				: 'auto'}
 	style:transform="{zTransform} scale(calc(1 + var(--z-brightness, 0) * 0.5))"
@@ -392,9 +392,9 @@
 				<!-- <button class="node-close pin-btn" title="Pin" aria-label="Pin node" onclick={handlePin}>
 					<Pin fill={isPinned ? 'yellow' : 'none'} class="h-5 w-5" />
 				</button> -->
-				<button class="node-close" title="Settings" aria-label="Settings" onclick={handleSettings}>
+				<!-- <button class="node-close" title="Settings" aria-label="Settings" onclick={handleSettings}>
 					<Settings2 class="h-5 w-5" />
-				</button>
+				</button> -->
 				<button class="node-close" title="Close" aria-label="Delete node" onclick={handleClose}>
 					<X class="h-5 w-5" />
 				</button>
@@ -513,13 +513,13 @@
 			0 0 0 1px var(--box-border-color),
 			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
 				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.05));
-		min-width: 400px;
-		min-height: 400px;
+		min-width: 360px;
+		min-height: 270px;
 		perspective: 1200px;
 	}
 	.drag-handle {
 		position: absolute;
-		bottom: -28px !important;
+		bottom: -26px !important;
 		left: 50%;
 		transform: translateX(-50%);
 		width: 80px;
@@ -531,7 +531,6 @@
 		z-index: 15;
 		opacity: 0.7;
 		transition: all 0.2s ease;
-		opacity: 0.5;
 	}
 
 	.drag-handle::before {
@@ -588,7 +587,7 @@
 		border-radius: 6px;
 		/* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); */
 		z-index: 15;
-		opacity: 0.9;
+		opacity: 0.7;
 		pointer-events: auto;
 		display: flex;
 		align-items: center;
@@ -600,7 +599,7 @@
 	.resize-handle.handle-se:hover {
 		opacity: 1;
 		background: rgba(80, 80, 80, 0);
-		transform: scale(1.3);
+		transform: scale(1.5);
 		/* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); */
 	}
 
@@ -866,7 +865,7 @@
 		color: #eaeaea;
 		font-size: 24px;
 		cursor: pointer;
-		opacity: 0.7;
+		/* opacity: 0.7; */
 		margin-left: 12px;
 		border-radius: 4px;
 		padding: 0 8px;
@@ -876,7 +875,7 @@
 		align-self: center;
 		display: flex;
 		align-items: center;
-		height: 42px;
+		height: 42px !important;
 	}
 	.node-close:hover {
 		background: rgba(255, 0, 0, 0.13);

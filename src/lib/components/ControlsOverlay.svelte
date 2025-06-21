@@ -82,8 +82,8 @@
 		canvasStore.addBox(newBox, true);
 	}
 
-	function handleRegenerateScene() {
-		canvasStore.regenerateScene();
+	async function handleRegenerateScene() {
+		await canvasStore.regenerateScene();
 	}
 
 	// Zoom slider state and handlers
@@ -132,9 +132,9 @@
 		class="control-button regenerate-button"
 		data-cursor="button"
 		onclick={handleRegenerateScene}
-		title="Generate new random scene"
+		title="Generate artwork gallery from your collection"
 	>
-		🎲 New Scene
+		🖼️ Artwork Gallery
 	</button>
 	<button
 		class="control-button clear-scene-button"

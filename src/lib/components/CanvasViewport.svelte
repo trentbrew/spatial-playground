@@ -321,7 +321,7 @@
 			{ id: 'sep3', label: '', separator: true },
 			{
 				id: 'regenerate',
-				label: 'Regenerate Scene',
+				label: 'Generate Artwork Gallery',
 				icon: Shuffle
 			}
 		];
@@ -394,7 +394,7 @@
 					centerView();
 					break;
 				case 'regenerate':
-					canvasStore.regenerateScene();
+					canvasStore.regenerateScene().catch(console.error);
 					break;
 			}
 		}

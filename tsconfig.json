@@ -1,0 +1,13 @@
+{
+	"extends": "./.svelte-kit/tsconfig.json",
+	"compilerOptions": {
+		"allowImportingTsExtensions": true,
+		"checkJs": true,
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"target": "ESNext",
+		"allowJs": true
+	},
+	"include": ["src/**/*.d.ts", "src/**/*.js", "src/**/*.svelte", "src/**/*.ts"],
+	"exclude": ["node_modules/**"]
+}

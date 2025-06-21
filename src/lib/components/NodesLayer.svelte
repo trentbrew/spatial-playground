@@ -7,7 +7,13 @@
 	import {
 		FOCAL_PLANE_TARGET_SCALE,
 		DOF_FOCUSED_SHARPNESS_FACTOR,
-		DOF_EXPLORATION_SHARPNESS_FACTOR
+		DOF_EXPLORATION_SHARPNESS_FACTOR,
+		DEPTH_BLUR_THRESHOLD,
+		DEPTH_BLUR_MULTIPLIER,
+		DEPTH_BLUR_FACTOR,
+		MAX_DEPTH_BLUR,
+		DEPTH_OPACITY_REDUCTION,
+		MIN_DEPTH_OPACITY
 	} from '$lib/constants';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 
@@ -69,8 +75,21 @@
 			: DOF_EXPLORATION_SHARPNESS_FACTOR;
 		const maxBlur = isFocused ? 16 : 8; // Higher blur when focused for dramatic effect
 
-		// Blur and brightness are functions of this focus delta.
+		// Base blur from depth of field calculation
 		let blurAmount = Math.min(maxBlur, focusDelta * dofSharpnessFactor);
+
+		// Enhanced zoom-dependent blur for very far back nodes
+		// This makes far back nodes more blurry when zoomed out, but still allows them to become sharp when focused
+		if (z <= DEPTH_BLUR_THRESHOLD) {
+			// Calculate zoom-dependent blur that decreases as we zoom in
+			const zoomFactor = 1 / Math.max(0.1, zoom); // Inverse of zoom, with minimum to prevent extreme values
+			const depthFactor = Math.abs(z) - Math.abs(DEPTH_BLUR_THRESHOLD); // How many levels below threshold
+			const zoomDependentBlur = depthFactor * DEPTH_BLUR_MULTIPLIER * zoomFactor;
+
+			// Add the zoom-dependent blur to the existing DOF blur (rather than replacing it)
+			blurAmount += Math.min(MAX_DEPTH_BLUR - blurAmount, zoomDependentBlur);
+		}
+
 		const brightness = Math.max(0.5, 1.0 - focusDelta * 0.6);
 
 		// If aperture effect is disabled and we're not in focus mode, disable blur.
@@ -88,6 +107,15 @@
 		let opacity = 1.0;
 		if (z > 0) {
 			opacity = Math.max(0, 1.0 - focusDelta * 0.8);
+		}
+
+		// Additional zoom-dependent opacity reduction for very far back nodes to enhance depth perception
+		if (z <= DEPTH_BLUR_THRESHOLD) {
+			const zoomFactor = 1 / Math.max(0.1, zoom); // Inverse of zoom
+			const depthFactor = Math.abs(z) - Math.abs(DEPTH_BLUR_THRESHOLD); // How many levels below threshold
+			const zoomDependentOpacityReduction =
+				depthFactor * DEPTH_OPACITY_REDUCTION * Math.min(2, zoomFactor); // Cap zoom factor for opacity
+			opacity = Math.max(MIN_DEPTH_OPACITY, opacity - zoomDependentOpacityReduction); // Don't go below minimum opacity
 		}
 
 		return { transform, filter, opacity, zIndex: z + 100 };

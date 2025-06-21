@@ -13,14 +13,22 @@ export const DOF_SHARPNESS_FACTOR = 5;
 export const DOF_FOCUSED_SHARPNESS_FACTOR = 4; // Shallow depth when focused
 export const DOF_EXPLORATION_SHARPNESS_FACTOR = 5; // Wide depth for exploration
 
+// Enhanced depth blur for very far back nodes (z <= -2)
+export const DEPTH_BLUR_THRESHOLD = -2; // Z-level threshold for enhanced blur
+export const DEPTH_BLUR_MULTIPLIER = 2.5; // Blur intensity multiplier for depth
+export const DEPTH_BLUR_FACTOR = 3; // Factor for calculating depth blur
+export const MAX_DEPTH_BLUR = 20; // Maximum blur amount in pixels
+export const DEPTH_OPACITY_REDUCTION = 0.15; // Opacity reduction per z-level for far back nodes
+export const MIN_DEPTH_OPACITY = 0.3; // Minimum opacity for far back nodes
+
 // Default dimensions for different node types
 export const DEFAULT_NODE_DIMENSIONS = {
 	sticky: { width: 400, height: 400 },
 	code: { width: 500, height: 300 },
 	image: { width: 420, height: 200 },
-	embed: { width: 400, height: 400 },
+	embed: { width: 800, height: 450 }, // 16:9 aspect ratio, twice as large
 	note: { width: 400, height: 400 }
 } as const;
 
-export const MAX_NODE_WIDTH = 400;
-export const MAX_NODE_HEIGHT = 400;
+export const MAX_NODE_WIDTH = 800; // Increased to accommodate larger embed nodes
+export const MAX_NODE_HEIGHT = 450;
