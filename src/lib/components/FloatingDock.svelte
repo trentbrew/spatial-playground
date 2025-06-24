@@ -132,7 +132,7 @@
 		try {
 			const currentZoom = canvasStore.zoom;
 			const newZoom = Math.min(currentZoom * 1.25, 5); // Max zoom 5x
-			canvasStore.setZoom(newZoom);
+			canvasStore.setZoom(newZoom, { autoUnfocus: true });
 			console.log(`Zoomed in to ${newZoom.toFixed(2)}x`);
 		} catch (error) {
 			console.error('Failed to zoom in:', error);
@@ -144,7 +144,7 @@
 		try {
 			const currentZoom = canvasStore.zoom;
 			const newZoom = Math.max(currentZoom * 0.8, 0.1); // Min zoom 0.1x
-			canvasStore.setZoom(newZoom);
+			canvasStore.setZoom(newZoom, { autoUnfocus: true });
 			console.log(`Zoomed out to ${newZoom.toFixed(2)}x`);
 		} catch (error) {
 			console.error('Failed to zoom out:', error);

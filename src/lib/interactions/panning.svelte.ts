@@ -1,6 +1,5 @@
 import type { Action } from 'svelte/action';
-import { offsetX, offsetY } from '$lib/stores/viewportStore';
-import { get } from 'svelte/store';
+import { canvasStore } from '$lib/stores/canvasStore.svelte';
 
 export const panning: Action<HTMLElement> = (node) => {
 	let isPanning = false;
@@ -22,8 +21,8 @@ export const panning: Action<HTMLElement> = (node) => {
 			cancelAnimationFrame(panUpdateFrame);
 		}
 		panUpdateFrame = requestAnimationFrame(() => {
-			offsetX.update((x) => x + pendingPanX);
-			offsetY.update((y) => y + pendingPanY);
+			const currentZoom = canvasStore.zoom;
+			canvasStore.panBy(pendingPanX / currentZoom, pendingPanY / currentZoom);
 			pendingPanX = 0;
 			pendingPanY = 0;
 			panUpdateFrame = null;

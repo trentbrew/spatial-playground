@@ -1213,11 +1213,12 @@ export const canvasStore = {
 	},
 
 	// Set zoom level directly (for slider)
-	setZoom(newZoom: number) {
+	setZoom(newZoom: number, { autoUnfocus = false } = {}) {
 		const clampedZoom = Math.max(0.1, Math.min(10, newZoom)); // Clamp between 0.1x and 10x
 
-		// Check if we should auto-unfocus when zooming away from a focused node
-		if (zoomedBoxId !== null) {
+		// Only auto-unfocus when explicitly requested (e.g., from keyboard shortcuts or UI buttons)
+		// Don't auto-unfocus during continuous gestures like pinch zoom
+		if (autoUnfocus && zoomedBoxId !== null) {
 			const focusedBox = boxes.find((b) => b.id === zoomedBoxId);
 			if (focusedBox) {
 				const expectedFocusZoom = getFocusZoomForZ(focusedBox.z);

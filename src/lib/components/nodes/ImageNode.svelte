@@ -1,18 +1,51 @@
 <script lang="ts">
-	export let id: number;
-	export let content: string;
-	export let color: string;
-	export let isSelected: boolean = false; // Currently unused but kept for future features
-	export let isFullscreen: boolean = false; // Currently unused but kept for future features
+	// Use $props() rune for component props
+	let {
+		id,
+		content,
+		color,
+		isSelected = false,
+		isFullscreen = false
+	}: {
+		id: number;
+		content: string | any;
+		color: string;
+		isSelected?: boolean;
+		isFullscreen?: boolean;
+	} = $props();
+
+	// Safely extract string content for image URL
+	let imageUrl = $state('');
+	$effect(() => {
+		if (typeof content === 'string') {
+			imageUrl = content;
+		} else if (content && typeof content === 'object') {
+			imageUrl = content.url || content.src || content.body || '';
+		} else {
+			imageUrl = '';
+		}
+	});
 </script>
 
 <div id={String(id)} class="image-node">
-	{#if content && (content.match(/^(https?:)?\/\//) || content.startsWith('data:image/') || content.startsWith('/'))}
-		<img src={content} alt="Image node {id}" />
+	{#if imageUrl && (imageUrl.match(/^(https?:)?\/\//) || imageUrl.startsWith('data:image/') || imageUrl.startsWith('/'))}
+		<img src={imageUrl} alt="Image node {id}" />
 	{:else}
 		<div class="placeholder">
 			<p>Paste image URL…</p>
-			<input type="text" bind:value={content} placeholder="https://example.com/image.jpg" />
+			<input
+				type="text"
+				value={imageUrl}
+				oninput={(e) => {
+					const input = e.target as HTMLInputElement;
+					imageUrl = input.value;
+					// Update the content in the store
+					import('$lib/stores/canvasStore.svelte').then(({ canvasStore }) => {
+						canvasStore.updateBox(id, { content: input.value });
+					});
+				}}
+				placeholder="https://example.com/image.jpg"
+			/>
 		</div>
 	{/if}
 </div>

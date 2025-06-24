@@ -56,10 +56,7 @@
 	const zoomedBoxId = $derived(canvasStore.zoomedBoxId);
 	const isAnimatingDoublezoom = $derived(canvasStore.isAnimatingDoublezoom);
 
-	// Target state from store
-	const targetZoom = $derived(canvasStore.targetZoom);
-	const targetOffsetX = $derived(canvasStore.targetOffsetX);
-	const targetOffsetY = $derived(canvasStore.targetOffsetY);
+	// Animation duration from store
 	const animationDuration = $derived(canvasStore.animationDuration);
 
 	// Create writable stores for viewport element and dimensions
@@ -67,13 +64,10 @@
 	const viewportWidthStore = writable<number>(0);
 	const viewportHeightStore = writable<number>(0);
 
-	let animationFrameId: number | null = null;
-	let animationStartTime: number | null = null;
-
-	// Store the state at the beginning of an animation
-	let animationSourceZoom = 1;
-	let animationSourceOffsetX = 0;
-	let animationSourceOffsetY = 0;
+	// Current viewport state (reactive) - use canvasStore directly
+	const currentZoom = $derived(canvasStore.zoom);
+	const currentOffsetX = $derived(canvasStore.offsetX);
+	const currentOffsetY = $derived(canvasStore.offsetY);
 
 	// --- Context Menu Reactive Bindings ---
 	const cmVisible = $derived(contextMenuStore.visible);
@@ -83,92 +77,6 @@
 	const cmWorldY = $derived(contextMenuStore.worldY);
 	const cmItems = $derived(contextMenuStore.items);
 	const cmTargetId = $derived(contextMenuStore.targetId);
-
-	function animateView(time: number) {
-		if (!browser) return;
-		if (animationStartTime === null) {
-			animationStartTime = time;
-		}
-
-		const elapsedTime = time - animationStartTime;
-		const duration = animationDuration > 0 ? animationDuration : 1; // Avoid division by zero
-		const progress = Math.min(elapsedTime / duration, 1);
-
-		// Use gentle easing for smooth zoom, but linear for focus animations
-		const easedProgress = animationDuration <= 200 ? easeOutQuart(progress) : progress;
-
-		const newZoom = lerp(animationSourceZoom, targetZoom, easedProgress);
-		const newOffsetX = lerp(animationSourceOffsetX, targetOffsetX, easedProgress);
-		const newOffsetY = lerp(animationSourceOffsetY, targetOffsetY, easedProgress);
-
-		// Update the actual viewport state in the store
-		canvasStore._setViewport({ zoom: newZoom, x: newOffsetX, y: newOffsetY });
-
-		// Refresh ghosting as the view changes
-		if (viewportElement) {
-			const viewportWidth = viewportElement.clientWidth;
-			const viewportHeight = viewportElement.clientHeight;
-			if (viewportWidth > 0 && viewportHeight > 0) {
-				canvasStore.onViewChange(viewportWidth, viewportHeight);
-			}
-		}
-
-		// Check for convergence (progress >= 1)
-		if (progress >= 1) {
-			// Snap to final target values and stop animation
-			canvasStore._setViewport({ zoom: targetZoom, x: targetOffsetX, y: targetOffsetY });
-
-			// If exiting fullscreen, finalize the state *after* animation completes
-			if (
-				canvasStore.fullscreenBoxId !== null &&
-				targetZoom === canvasStore.originalViewZoom &&
-				targetOffsetX === canvasStore.originalViewOffsetX &&
-				targetOffsetY === canvasStore.originalViewOffsetY
-			) {
-				canvasStore._finalizeExitFullscreen();
-			}
-
-			// Reset animation flags
-			if (isAnimatingDoublezoom) {
-				canvasStore.setAnimatingDoublezoom(false);
-			}
-			if (canvasStore.isAnimatingFullscreen) {
-				canvasStore.clearAnimatingFullscreen();
-			}
-
-			animationFrameId = null;
-			animationStartTime = null;
-		} else {
-			// Continue animation
-			animationFrameId = requestAnimationFrame(animateView);
-		}
-	}
-
-	function startAnimation() {
-		if (!browser) return;
-		// If an animation frame is already requested, cancel it to restart.
-		if (animationFrameId) {
-			cancelAnimationFrame(animationFrameId);
-		}
-
-		// Store the starting point for the animation
-		animationSourceZoom = zoom;
-		animationSourceOffsetX = offsetX;
-		animationSourceOffsetY = offsetY;
-		animationStartTime = null; // Reset start time
-
-		animationFrameId = requestAnimationFrame(animateView);
-	}
-
-	// Reactively start animation when target differs from current
-	$effect(() => {
-		if (
-			browser &&
-			(zoom !== targetZoom || offsetX !== targetOffsetX || offsetY !== targetOffsetY)
-		) {
-			startAnimation();
-		}
-	});
 
 	// Provide context
 	setViewportContext({
@@ -213,9 +121,6 @@
 			resizeObserver.observe(viewportElement);
 		}
 
-		// Start animation on mount if needed
-		startAnimation();
-
 		// --- Initial View Calculation ---
 		if (!browser || !viewportElement) return;
 
@@ -242,10 +147,6 @@
 		return () => {
 			cleanup(); // Remove global keyboard listener
 			resizeObserver.disconnect();
-			// Ensure animation frame is cancelled on destroy
-			if (animationFrameId) {
-				cancelAnimationFrame(animationFrameId);
-			}
 		};
 	});
 
@@ -282,8 +183,8 @@
 		const screenY = event.clientY - rect.top;
 
 		// Convert to world coordinates accounting for zoom and offset
-		const worldX = (screenX - offsetX) / zoom;
-		const worldY = (screenY - offsetY) / zoom;
+		const worldX = (screenX - currentOffsetX) / currentZoom;
+		const worldY = (screenY - currentOffsetY) / currentZoom;
 
 		// Generate background context menu items
 		const items: ContextMenuItem[] = [
@@ -475,7 +376,7 @@
 
 		canvasStore.setTargetViewportAnimated(
 			{
-				zoom: zoom,
+				zoom: currentZoom,
 				x: viewportWidth / 2,
 				y: viewportHeight / 2
 			},
@@ -662,8 +563,8 @@
 		const rect = viewportElement.getBoundingClientRect();
 		const screenX = event.clientX - rect.left;
 		const screenY = event.clientY - rect.top;
-		const worldX = (screenX - offsetX) / zoom;
-		const worldY = (screenY - offsetY) / zoom;
+		const worldX = (screenX - currentOffsetX) / currentZoom;
+		const worldY = (screenY - currentOffsetY) / currentZoom;
 
 		// If files present and first is image
 		if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
@@ -718,9 +619,9 @@
 	y={cmY}
 	worldX={cmWorldX}
 	worldY={cmWorldY}
-	{zoom}
-	{offsetX}
-	{offsetY}
+	zoom={currentZoom}
+	offsetX={currentOffsetX}
+	offsetY={currentOffsetY}
 	items={cmItems}
 	targetId={cmTargetId}
 	on:select={handleContextMenuSelect}

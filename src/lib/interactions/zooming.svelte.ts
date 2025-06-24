@@ -1,5 +1,5 @@
 import type { Action } from 'svelte/action';
-import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
+import { canvasStore } from '$lib/stores/canvasStore.svelte';
 import { get } from 'svelte/store';
 
 // Constants
@@ -13,14 +13,14 @@ const VELOCITY_ZOOM_MULTIPLIER = 2.5; // How much more to zoom on fast gestures
 let zoomAnimationFrame: number | null = null;
 function animateZoomTo(targetZoom: number, duration = 200) {
 	if (zoomAnimationFrame) cancelAnimationFrame(zoomAnimationFrame);
-	const startZoom = get(zoom);
+	const startZoom = canvasStore.zoom;
 	const startTime = performance.now();
 	function animate(now: number) {
 		const elapsed = now - startTime;
 		const t = Math.min(elapsed / duration, 1);
 		const eased = t < 1 ? 1 - Math.pow(1 - t, 2) : 1;
 		const currentZoom = startZoom + (targetZoom - startZoom) * eased;
-		zoom.set(currentZoom);
+		canvasStore.setZoom(currentZoom);
 		if (t < 1) {
 			zoomAnimationFrame = requestAnimationFrame(animate);
 		}
@@ -67,20 +67,20 @@ export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefin
 
 	// --- Smooth Zooming Helpers ---
 
-	let targetZoomValue = get(zoom);
+	let targetZoomValue = canvasStore.zoom;
 	let smoothZoomRaf: number | null = null;
 
 	function smoothZoomStep() {
-		const current = get(zoom);
+		const current = canvasStore.zoom;
 		const diff = targetZoomValue - current;
 		if (Math.abs(diff) < 0.001) {
 			// Close enough – snap to target and stop
-			zoom.set(targetZoomValue);
+			canvasStore.setZoom(targetZoomValue);
 			smoothZoomRaf = null;
 			return;
 		}
 		// Ease by moving a fraction of the remaining distance
-		zoom.set(current + diff * 0.2);
+		canvasStore.setZoom(current + diff * 0.2);
 		smoothZoomRaf = requestAnimationFrame(smoothZoomStep);
 	}
 
@@ -112,8 +112,7 @@ export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefin
 		const panDeltaX = -event.deltaX * 0.5;
 		const panDeltaY = -event.deltaY * 0.5;
 
-		offsetX.update((x) => x + panDeltaX);
-		offsetY.update((y) => y + panDeltaY);
+		canvasStore.panBy(panDeltaX, panDeltaY);
 	}
 
 	// Clear velocity tracking after a period of inactivity

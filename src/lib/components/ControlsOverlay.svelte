@@ -111,7 +111,7 @@
 	function handleZoomSlider(event: Event) {
 		const target = event.target as HTMLInputElement;
 		const newZoom = parseFloat(target.value);
-		canvasStore.setZoom(newZoom);
+		canvasStore.setZoom(newZoom, { autoUnfocus: true });
 
 		// Refresh ghosting when zoom changes
 		const viewport = document.querySelector('.viewport') as HTMLElement;
@@ -126,7 +126,7 @@
 
 	// Zoom presets
 	function setZoomPreset(zoomLevel: number) {
-		canvasStore.setZoom(zoomLevel);
+		canvasStore.setZoom(zoomLevel, { autoUnfocus: true });
 
 		// Refresh ghosting when zoom changes
 		const viewport = document.querySelector('.viewport') as HTMLElement;
