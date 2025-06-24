@@ -4,7 +4,7 @@ export interface BoxState {
 	y: number;
 	width: number;
 	height: number;
-	content: string;
+	content: any; // Allow flexible content (string, object, etc.)
 	color: string;
 	z: number; // Z-axis position for parallax depth
 }

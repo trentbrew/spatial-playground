@@ -81,9 +81,11 @@
 	});
 
 	// Handle content changes from Quill editor
-	function handleContentChange(event: CustomEvent<{ text: string; delta: any }>) {
-		const newText = event.detail.text;
-		canvasStore.updateBox(id, { content: newText });
+	function handleContentChange(data: { text: string; delta: any }) {
+		const newText = data.text;
+		const newContent =
+			typeof content === 'object' ? { ...content, body: newText } : { body: newText };
+		canvasStore.updateBox(id, { content: newContent });
 	}
 
 	// Handle content changes from fallback textarea
@@ -105,7 +107,7 @@
 			{#if useQuillEditor && QuillEditor}
 				<!-- Use Quill Editor when available -->
 				<QuillEditorComponent
-					{content}
+					content={textContent}
 					{isFocused}
 					showColorButton={true}
 					on:colorpick={() => (showColorPalette = !showColorPalette)}

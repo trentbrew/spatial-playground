@@ -190,7 +190,7 @@ export function detectObstruction(
 	);
 
 	// Find boxes that are in front of the focused box (higher z-index)
-	const foregroundBoxes = allBoxes.filter(
+	const foregroundBoxes = allBoxes?.filter(
 		(box) => box.id !== focusedBox.id && box.z > focusedBox.z
 	);
 

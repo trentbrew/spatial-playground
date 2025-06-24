@@ -33,6 +33,7 @@
 		Target,
 		Shuffle
 	} from '@lucide/svelte';
+	import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
 
 	// --- Constants ---
 	const SMOOTHING_FACTOR = 0.4;
@@ -49,9 +50,6 @@
 	let viewportElement: HTMLDivElement;
 
 	// Direct access to store properties (reactive)
-	const zoom = $derived(canvasStore.zoom);
-	const offsetX = $derived(canvasStore.offsetX);
-	const offsetY = $derived(canvasStore.offsetY);
 	const boxes = $derived(canvasStore.boxes);
 	const selectedBoxId = $derived(canvasStore.selectedBoxId);
 	const fullscreenBoxId = $derived(canvasStore.fullscreenBoxId);
@@ -76,6 +74,15 @@
 	let animationSourceZoom = 1;
 	let animationSourceOffsetX = 0;
 	let animationSourceOffsetY = 0;
+
+	// --- Context Menu Reactive Bindings ---
+	const cmVisible = $derived(contextMenuStore.visible);
+	const cmX = $derived(contextMenuStore.x);
+	const cmY = $derived(contextMenuStore.y);
+	const cmWorldX = $derived(contextMenuStore.worldX);
+	const cmWorldY = $derived(contextMenuStore.worldY);
+	const cmItems = $derived(contextMenuStore.items);
+	const cmTargetId = $derived(contextMenuStore.targetId);
 
 	function animateView(time: number) {
 		if (!browser) return;
@@ -701,21 +708,21 @@
 </div>
 
 <!-- <SceneStats /> -->
-<!-- <ControlsOverlay /> -->
+<ControlsOverlay />
 <TracingIndicator />
 <ObstructionIndicator />
 
 <ContextMenu
-	visible={contextMenuStore.visible}
-	x={contextMenuStore.x}
-	y={contextMenuStore.y}
-	worldX={contextMenuStore.worldX}
-	worldY={contextMenuStore.worldY}
+	visible={cmVisible}
+	x={cmX}
+	y={cmY}
+	worldX={cmWorldX}
+	worldY={cmWorldY}
 	{zoom}
 	{offsetX}
 	{offsetY}
-	items={contextMenuStore.items}
-	targetId={contextMenuStore.targetId}
+	items={cmItems}
+	targetId={cmTargetId}
 	on:select={handleContextMenuSelect}
 	on:close={() => contextMenuStore.hide()}
 />

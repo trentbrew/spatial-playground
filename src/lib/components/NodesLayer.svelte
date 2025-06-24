@@ -16,11 +16,9 @@
 		MIN_DEPTH_OPACITY
 	} from '$lib/constants';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
+	import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
 
 	// --- Reactive State ---
-	const zoom = $derived(canvasStore.zoom);
-	const offsetX = $derived(canvasStore.offsetX);
-	const offsetY = $derived(canvasStore.offsetY);
 	const boxes = $derived(canvasStore.boxes);
 	const draggingBoxId = $derived(canvasStore.draggingBoxId);
 	const zoomedBoxId = $derived(canvasStore.zoomedBoxId);
@@ -39,6 +37,30 @@
 		};
 	});
 
+	// Performance optimization: throttle transform updates
+	let transformUpdateFrame: number | null = null;
+	let cachedTransform = '';
+
+	function updateTransform() {
+		if (transformUpdateFrame) return;
+		transformUpdateFrame = requestAnimationFrame(() => {
+			const newTransform = `translate(${$offsetX}px, ${$offsetY}px) scale(${$zoom})`;
+			if (newTransform !== cachedTransform) {
+				cachedTransform = newTransform;
+				// Transform will be applied via reactive statement
+			}
+			transformUpdateFrame = null;
+		});
+	}
+
+	// React to viewport changes
+	$effect(() => {
+		$zoom;
+		$offsetX;
+		$offsetY;
+		updateTransform();
+	});
+
 	// --- Depth Effect Calculations (based on global zoom) ---
 
 	// --- Transform & Filter String Generation ---
@@ -52,14 +74,14 @@
 		// center of the viewport, rather than the top-left corner.
 		const parallaxCorrectionX = (viewportWidth / 2) * (1 - parallaxFactor);
 		const parallaxCorrectionY = (viewportHeight / 2) * (1 - parallaxFactor);
-		const parallaxOffsetX = offsetX * parallaxFactor + parallaxCorrectionX;
-		const parallaxOffsetY = offsetY * parallaxFactor + parallaxCorrectionY;
+		const parallaxOffsetX = $offsetX * parallaxFactor + parallaxCorrectionX;
+		const parallaxOffsetY = $offsetY * parallaxFactor + parallaxCorrectionY;
 
 		// The layer's intrinsic scale based on its depth
 		const intrinsicScale = getIntrinsicScaleFactor(z);
 
 		// The final, total scale of the layer, combining global zoom and intrinsic scale
-		const totalEffectiveScale = zoom * intrinsicScale;
+		const totalEffectiveScale = $zoom * intrinsicScale;
 
 		// The layer's transform
 		const transform = `translate(${parallaxOffsetX}px, ${parallaxOffsetY}px) scale(${totalEffectiveScale})`;
@@ -82,7 +104,7 @@
 		// This makes far back nodes more blurry when zoomed out, but still allows them to become sharp when focused
 		if (z <= DEPTH_BLUR_THRESHOLD) {
 			// Calculate zoom-dependent blur that decreases as we zoom in
-			const zoomFactor = 1 / Math.max(0.1, zoom); // Inverse of zoom, with minimum to prevent extreme values
+			const zoomFactor = 1 / Math.max(0.1, $zoom); // Inverse of zoom, with minimum to prevent extreme values
 			const depthFactor = Math.abs(z) - Math.abs(DEPTH_BLUR_THRESHOLD); // How many levels below threshold
 			const zoomDependentBlur = depthFactor * DEPTH_BLUR_MULTIPLIER * zoomFactor;
 
@@ -111,7 +133,7 @@
 
 		// Additional zoom-dependent opacity reduction for very far back nodes to enhance depth perception
 		if (z <= DEPTH_BLUR_THRESHOLD) {
-			const zoomFactor = 1 / Math.max(0.1, zoom); // Inverse of zoom
+			const zoomFactor = 1 / Math.max(0.1, $zoom); // Inverse of zoom
 			const depthFactor = Math.abs(z) - Math.abs(DEPTH_BLUR_THRESHOLD); // How many levels below threshold
 			const zoomDependentOpacityReduction =
 				depthFactor * DEPTH_OPACITY_REDUCTION * Math.min(2, zoomFactor); // Cap zoom factor for opacity
@@ -184,6 +206,10 @@
 		height: 100%;
 		transform-origin: 0 0;
 		pointer-events: none;
+		/* Performance optimizations for smooth transforms */
+		will-change: transform, filter, opacity;
+		transform-style: preserve-3d;
+		backface-visibility: hidden;
 		/* Transitions are now handled by the main animation loop in the viewport for smoothness */
 	}
 

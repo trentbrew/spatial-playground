@@ -401,6 +401,18 @@
 		color: var(--foreground-color, #181818) !important;
 	}
 
+	:global(.ql-editor h1) {
+		padding-bottom: 12px !important;
+	}
+
+	:global(.ql-editor h2) {
+		padding-bottom: 12px !important;
+	}
+
+	:global(.ql-editor p) {
+		line-height: 1.5 !important;
+	}
+
 	:global(.ql-editor.ql-blank::before) {
 		font-style: italic;
 		color: #999;

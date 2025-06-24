@@ -52,10 +52,10 @@
 
 	// Reactive position calculations to keep menu in viewport
 	const adjustedX = $derived(
-		browser ? Math.min(screenX, window.innerWidth - menuWidth - 10) : screenX
+		browser ? Math.min(Math.max(screenX, 10), window.innerWidth - menuWidth - 10) : screenX
 	);
 	const adjustedY = $derived(
-		browser ? Math.min(screenY, window.innerHeight - menuHeight - 10) : screenY
+		browser ? Math.min(Math.max(screenY, 10), window.innerHeight - menuHeight - 10) : screenY
 	);
 
 	function handleItemClick(item: ContextMenuItem) {

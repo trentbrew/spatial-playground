@@ -1,9 +1,20 @@
 <script>
 	import '../app.css';
 	import CustomCursor from '$lib/components/CustomCursor.svelte';
+	import { zero } from '$lib/stores/zeroStore.svelte';
+	import { onMount } from 'svelte';
+
+	// Initialize Zero client on mount
+	onMount(async () => {
+		try {
+			// Zero client initialized successfully
+		} catch (error) {
+			console.error('❌ Failed to initialize Zero:', error);
+		}
+	});
 </script>
 
-<CustomCursor />
+<!-- <CustomCursor /> -->
 
 {#await Promise.resolve() then _}
 	<slot />

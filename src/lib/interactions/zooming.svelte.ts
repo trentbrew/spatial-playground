@@ -1,5 +1,6 @@
 import type { Action } from 'svelte/action';
-import { canvasStore } from '$lib/stores/canvasStore.svelte';
+import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
+import { get } from 'svelte/store';
 
 // Constants
 const ZOOM_SPEED_FACTOR = 0.005;
@@ -7,6 +8,25 @@ const ZOOM_ANIMATION_DURATION = 150; // ms - smooth zoom animation
 const VELOCITY_SAMPLE_SIZE = 3; // Number of recent events to track for velocity
 const FAST_GESTURE_THRESHOLD = 300; // deltaY units per second to be considered "fast"
 const VELOCITY_ZOOM_MULTIPLIER = 2.5; // How much more to zoom on fast gestures
+
+// Helper for smooth zoom animation (only for discrete actions, not continuous gestures)
+let zoomAnimationFrame: number | null = null;
+function animateZoomTo(targetZoom: number, duration = 200) {
+	if (zoomAnimationFrame) cancelAnimationFrame(zoomAnimationFrame);
+	const startZoom = get(zoom);
+	const startTime = performance.now();
+	function animate(now: number) {
+		const elapsed = now - startTime;
+		const t = Math.min(elapsed / duration, 1);
+		const eased = t < 1 ? 1 - Math.pow(1 - t, 2) : 1;
+		const currentZoom = startZoom + (targetZoom - startZoom) * eased;
+		zoom.set(currentZoom);
+		if (t < 1) {
+			zoomAnimationFrame = requestAnimationFrame(animate);
+		}
+	}
+	zoomAnimationFrame = requestAnimationFrame(animate);
+}
 
 export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefined> = (
 	node,
@@ -45,70 +65,55 @@ export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefin
 		return velocity;
 	}
 
-	function handleWheel(event: WheelEvent) {
-		// Disable zooming if a box is fullscreen
-		if (canvasStore.fullscreenBoxId !== null) {
+	// --- Smooth Zooming Helpers ---
+
+	let targetZoomValue = get(zoom);
+	let smoothZoomRaf: number | null = null;
+
+	function smoothZoomStep() {
+		const current = get(zoom);
+		const diff = targetZoomValue - current;
+		if (Math.abs(diff) < 0.001) {
+			// Close enough – snap to target and stop
+			zoom.set(targetZoomValue);
+			smoothZoomRaf = null;
 			return;
 		}
+		// Ease by moving a fraction of the remaining distance
+		zoom.set(current + diff * 0.2);
+		smoothZoomRaf = requestAnimationFrame(smoothZoomStep);
+	}
 
+	function kickSmoothZoom() {
+		if (smoothZoomRaf === null) {
+			smoothZoomRaf = requestAnimationFrame(smoothZoomStep);
+		}
+	}
+
+	function handleWheel(event: WheelEvent) {
 		if (preventDefault) {
 			event.preventDefault();
 		}
 
+		// Pinch / trackpad zoom are reported as wheel events with ctrlKey (macOS & others)
 		const isZoomGesture = event.ctrlKey || event.metaKey;
 
 		if (isZoomGesture) {
-			// Track gesture velocity
-			const currentEvent = { deltaY: Math.abs(event.deltaY), timestamp: Date.now() };
-			const velocity = calculateGestureVelocity(currentEvent);
-			// --- Zoom Logic (Ctrl/Meta + Scroll) ---
-			const rect = node.getBoundingClientRect();
-			const mouseX = event.clientX - rect.left;
-			const mouseY = event.clientY - rect.top;
+			// Calculate zoom delta based on wheel movement – smaller multiplier for finer control
+			const zoomDelta = -event.deltaY * 0.0015; // tuned for smoother response
+			targetZoomValue *= 1 + zoomDelta;
+			targetZoomValue = Math.max(0.1, Math.min(5, targetZoomValue));
 
-			const currentZoom = canvasStore.zoom;
-			const currentOffsetX = canvasStore.offsetX;
-			const currentOffsetY = canvasStore.offsetY;
-
-			const worldX = (mouseX - currentOffsetX) / currentZoom;
-			const worldY = (mouseY - currentOffsetY) / currentZoom;
-
-			// Adaptive zoom factor based on gesture velocity
-			const isFastGesture = velocity > FAST_GESTURE_THRESHOLD;
-			const baseZoomFactor = 1.05; // Base zoom factor for slow gestures
-			const adaptiveZoomFactor = isFastGesture
-				? Math.min(baseZoomFactor + (baseZoomFactor - 1) * VELOCITY_ZOOM_MULTIPLIER, 1.25) // Cap at 1.25 for fast gestures
-				: baseZoomFactor;
-
-			const newZoom = Math.max(
-				0.1,
-				Math.min(currentZoom * (event.deltaY < 0 ? adaptiveZoomFactor : 1 / adaptiveZoomFactor), 10)
-			);
-
-			// Debug logging (remove in production)
-			if (isFastGesture) {
-				console.log(
-					`🚀 Fast gesture detected! Velocity: ${velocity.toFixed(0)}, Zoom factor: ${adaptiveZoomFactor.toFixed(3)}`
-				);
-			}
-
-			const newOffsetX = mouseX - worldX * newZoom;
-			const newOffsetY = mouseY - worldY * newZoom;
-
-			// Use smooth animated zoom instead of instant
-			canvasStore.setTargetViewportAnimated(
-				{ zoom: newZoom, x: newOffsetX, y: newOffsetY },
-				ZOOM_ANIMATION_DURATION
-			);
-
-			// Reset velocity tracking after inactivity
-			resetVelocityTracking();
-		} else {
-			// --- Pan Logic (Standard Scroll/Trackpad Swipe) ---
-			canvasStore.panBy(-event.deltaX, -event.deltaY);
-			// Clear velocity tracking for non-zoom gestures
-			recentEvents = [];
+			kickSmoothZoom();
+			return;
 		}
+
+		// --- Pan (two-finger swipe) ---
+		const panDeltaX = -event.deltaX * 0.5;
+		const panDeltaY = -event.deltaY * 0.5;
+
+		offsetX.update((x) => x + panDeltaX);
+		offsetY.update((y) => y + panDeltaY);
 	}
 
 	// Clear velocity tracking after a period of inactivity
@@ -128,6 +133,9 @@ export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefin
 			node.removeEventListener('wheel', handleWheel);
 			if (velocityResetTimeout) {
 				clearTimeout(velocityResetTimeout);
+			}
+			if (smoothZoomRaf) {
+				cancelAnimationFrame(smoothZoomRaf);
 			}
 		}
 	};

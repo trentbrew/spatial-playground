@@ -2,7 +2,8 @@
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import type { AppBoxState } from '$lib/canvasState';
 	import { MAX_NODE_WIDTH, MAX_NODE_HEIGHT } from '$lib/constants';
-	import ThemeToggle from './ThemeToggle.svelte'; // Assuming this exists
+	import ThemeToggle from './ThemeToggle.svelte';
+	import { canvasZeroAdapter, zero } from '$lib/stores/canvasZeroAdapter.svelte';
 
 	// Direct access to store properties (reactive)
 	const selectedBoxId = $derived(canvasStore.selectedBoxId);
@@ -14,6 +15,10 @@
 	const currentOffsetX = $derived(canvasStore.offsetX);
 	const currentOffsetY = $derived(canvasStore.offsetY);
 	const apertureEnabled = $derived(canvasStore.apertureEnabled);
+
+	// Persistence state
+	const persistenceEnabled = $derived(canvasStore.persistenceEnabled);
+	const hasSavedState = $derived(canvasStore.hasSavedState);
 
 	// Input values, synced one-way from selected box
 	let debugXInput = $state('');
@@ -66,10 +71,19 @@
 		const height = Math.min(120 + Math.random() * 80, MAX_NODE_HEIGHT);
 		const z = Math.floor(Math.random() * 4) - 3; // Z from -3 to 0
 
+		// Calculate viewport center in world coordinates
+		const viewport = document.querySelector('.viewport') as HTMLElement;
+		const viewportWidth = viewport?.clientWidth || 800;
+		const viewportHeight = viewport?.clientHeight || 600;
+
+		// Convert viewport center to world coordinates
+		const worldCenterX = (viewportWidth / 2 - currentOffsetX) / currentZoom;
+		const worldCenterY = (viewportHeight / 2 - currentOffsetY) / currentZoom;
+
 		const newBox = {
 			id: newId,
-			x: 0, // Will be updated by collision avoidance
-			y: 0, // Will be updated by collision avoidance
+			x: worldCenterX - width / 2, // Center the node at viewport center
+			y: worldCenterY - height / 2, // Center the node at viewport center
 			width: Math.round(width),
 			height: Math.round(height),
 			color,
@@ -124,6 +138,143 @@
 			}
 		}
 	}
+
+	// Zero test functions
+	async function testZeroSave() {
+		try {
+			console.log('🧪 Testing Zero save...');
+
+			// Save current viewport state to Zero
+			await canvasZeroAdapter.updateViewport({
+				zoom: currentZoom,
+				offsetX: currentOffsetX,
+				offsetY: currentOffsetY,
+				selectedBoxId: selectedBoxId,
+				fullscreenBoxId: null,
+				lastSelectedBoxId: selectedBoxId,
+				persistenceEnabled: persistenceEnabled
+			});
+
+			console.log('✅ Zero save test completed - viewport state saved');
+		} catch (error) {
+			console.error('❌ Zero save test failed:', error);
+		}
+	}
+
+	async function testZeroLoad() {
+		try {
+			console.log('🧪 Testing Zero load...');
+
+			// Log current store state
+			let canvasState: any = null;
+			let allNodes: any = null;
+
+			canvasZeroAdapter.canvasState.subscribe((val) => (canvasState = val))();
+			canvasZeroAdapter.allNodes.subscribe((val) => (allNodes = val))();
+
+			console.log('📊 Current Zero state:');
+			console.log('  Canvas State:', canvasState);
+			console.log('  All Nodes:', allNodes);
+
+			// Try direct Zero queries for verification
+			const canvasQuery = await zero.query.canvas_state.run();
+			const nodesQuery = await zero.query.nodes.run();
+			console.log('📊 Direct Zero queries:');
+			console.log('  Canvas states:', canvasQuery);
+			console.log('  Nodes:', nodesQuery);
+
+			console.log('✅ Zero load test completed');
+		} catch (error) {
+			console.error('❌ Zero load test failed:', error);
+		}
+	}
+
+	async function testZeroMutation() {
+		try {
+			console.log('🧪 Testing Zero mutation...');
+
+			// Add a test node using Zero
+			await canvasZeroAdapter.addNode({
+				x: Math.random() * 500,
+				y: Math.random() * 500,
+				width: 200,
+				height: 150,
+				type: 'sticky-note',
+				content: { text: `Zero Test Node ${Date.now()}` }
+			});
+
+			console.log('✅ Zero mutation test completed - added test node');
+		} catch (error) {
+			console.error('❌ Zero mutation test failed:', error);
+		}
+	}
+
+	async function testZeroPersistence() {
+		try {
+			console.log('🧪 Testing complete Zero persistence flow...');
+
+			// 1. Save current state
+			await testZeroSave();
+
+			// 2. Wait a moment for Zero to process
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+
+			// 3. Load and verify state
+			await testZeroLoad();
+
+			// 4. Test node creation
+			await testZeroMutation();
+
+			// 5. Final verification
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+			await testZeroLoad();
+
+			console.log('✅ Complete Zero persistence test completed');
+		} catch (error) {
+			console.error('❌ Zero persistence test failed:', error);
+		}
+	}
+
+	async function testAddNode() {
+		console.log('🧪 Testing Zero - Adding node...');
+		await canvasZeroAdapter.addNode({
+			x: Math.random() * 500,
+			y: Math.random() * 500,
+			width: 200,
+			height: 150,
+			type: 'sticky-note',
+			content: { text: `Test node ${Date.now()}` }
+		});
+		console.log('✅ Node added to Zero');
+	}
+
+	async function testUpdateCanvas() {
+		console.log('🧪 Testing Zero - Updating canvas...');
+		await canvasZeroAdapter.updateViewport({
+			zoom: Math.random() * 2 + 0.5,
+			offsetX: Math.random() * 100,
+			offsetY: Math.random() * 100
+		});
+		console.log('✅ Canvas updated in Zero');
+	}
+
+	async function showCanvasState() {
+		console.log('🧪 Testing Zero - Current state:');
+		console.log('Canvas State:', canvasZeroAdapter.canvasState);
+		console.log('All Nodes:', canvasZeroAdapter.allNodes);
+		console.log('Zero client:', zero);
+
+		// Also try to query directly
+		try {
+			const canvasQuery = await zero.query.canvas_state.run();
+			const nodesQuery = await zero.query.nodes.run();
+			console.log('📊 Direct Zero queries:');
+			console.log('  Canvas states:', canvasQuery);
+			console.log('  Nodes:', nodesQuery);
+		} catch (error) {
+			console.error('❌ Direct query failed:', error);
+		}
+	}
 </script>
 
 <div class="controls-container">
@@ -152,6 +303,43 @@
 	>
 		{apertureEnabled ? '✨' : '➖'} Aperture
 	</button>
+
+	<!-- Zero Test Controls -->
+	<div class="zero-controls">
+		<button
+			class="control-button zero-test-button"
+			data-cursor="button"
+			onclick={() => testZeroSave()}
+			title="Test saving to Zero"
+		>
+			💾 Zero Save
+		</button>
+		<button
+			class="control-button zero-test-button"
+			data-cursor="button"
+			onclick={() => testZeroLoad()}
+			title="Test loading from Zero"
+		>
+			📂 Zero Load
+		</button>
+		<button
+			class="control-button zero-test-button"
+			data-cursor="button"
+			onclick={() => testZeroMutation()}
+			title="Test Zero mutation"
+		>
+			🔄 Zero Mutate
+		</button>
+		<button
+			class="control-button zero-test-button"
+			data-cursor="button"
+			onclick={() => testZeroPersistence()}
+			title="Test complete Zero persistence flow"
+		>
+			🧪 Full Test
+		</button>
+	</div>
+
 	<ThemeToggle />
 
 	<!-- Zoom Controls -->
@@ -420,5 +608,75 @@
 
 	.aperture-toggle:hover {
 		background-color: var(--control-button-hover-bg);
+	}
+
+	/* Persistence Controls */
+	.persistence-controls {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-left: 10px;
+		padding-left: 10px;
+		border-left: 1px solid rgba(255, 255, 255, 0.2);
+	}
+
+	.save-button {
+		background-color: #27ae60;
+		color: white;
+	}
+
+	.save-button:hover {
+		background-color: #219a52;
+	}
+
+	.load-button {
+		background-color: #3498db;
+		color: white;
+	}
+
+	.load-button:hover:not(:disabled) {
+		background-color: #2980b9;
+	}
+
+	.clear-saved-button {
+		background-color: #e74c3c;
+		color: white;
+	}
+
+	.clear-saved-button:hover:not(:disabled) {
+		background-color: #c0392b;
+	}
+
+	.persistence-toggle {
+		background-color: var(--control-button-bg);
+		transition: background-color 0.2s;
+	}
+
+	.persistence-toggle:hover {
+		background-color: var(--control-button-hover-bg);
+	}
+
+	.control-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	/* Zero Controls */
+	.zero-controls {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin-left: 10px;
+		padding-left: 10px;
+		border-left: 1px solid rgba(255, 255, 255, 0.2);
+	}
+
+	.zero-test-button {
+		background-color: #9b59b6;
+		color: white;
+	}
+
+	.zero-test-button:hover {
+		background-color: #8e44ad;
 	}
 </style>

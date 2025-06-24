@@ -97,8 +97,24 @@
 	let containerElement: HTMLDivElement;
 	let dragHandleElement: HTMLDivElement;
 
-	// Compute node title (fallback to type if no content)
-	const nodeTitle = box.content?.split('\n')[0]?.slice(0, 32) || 'Untitled';
+	// Derive a title from the node's content, handling both string and object forms
+	let nodeTitle = $state('Untitled');
+
+	$effect(() => {
+		let source = '';
+		if (typeof box.content === 'string') {
+			source = box.content;
+		} else if (box.content && typeof box.content === 'object') {
+			// Prefer an explicit title field, else fall back to body/text properties
+			source =
+				(box.content.title as string | undefined) ??
+				(box.content.body as string | undefined) ??
+				(box.content.text as string | undefined) ??
+				'';
+		}
+		nodeTitle = source.split?.('\n')[0]?.slice(0, 32) || 'Untitled';
+	});
+
 	const nodeIcon = nodeTypeIcons[box.type] || nodeTypeIcons.default;
 
 	// 3D transform for z layer
@@ -106,24 +122,17 @@
 	const zTransform = `perspective(800px) translateZ(${box.z * depthFactor}px) rotateX(${box.z * -2}deg) rotateY(${box.z * 1.5}deg)`;
 
 	// Add local state for flipping and pinning
-	let showSettingsBack = false;
-	let isPinned = false; // Demo fallback, real pin logic to be added
+	let showSettingsBack = $state(false);
+	let isPinned = $state(false); // Demo fallback, real pin logic to be added
 
 	function handleClick(event: MouseEvent) {
-		console.log(`[NodeContainer] Clicked box id: ${box.id}`, box);
-
-		// Check if this box is already selected and zoomed (focused)
-		const isAlreadyFocused =
-			selectedBoxId === box.id && zoomedBoxId === box.id && currentZoom >= focusZoom * 0.95; // add tolerance
-
-		if (isAlreadyFocused && !isGhosted) {
-			// If already focused, don't zoom - just allow interaction with content
-			console.log(`[NodeContainer] Box ${box.id} already focused, allowing content interaction`);
+		// If the box is already focused, do nothing to allow content interaction.
+		if (zoomedBoxId === box.id) {
 			return;
 		}
 
 		// Always select the box first
-		canvasStore.selectBox(box.id);
+		canvasStore.selectBox(box.id, viewportWidth, viewportHeight);
 
 		// Zoom to focus on the box (this includes centering + zoom)
 		canvasStore.zoomToBox(box.id, viewportWidth, viewportHeight);
@@ -498,6 +507,10 @@
 		overflow: visible;
 		flex-direction: column;
 		background-color: var(--handle-bg-color);
+		/* Add performance optimizations for smooth transforms */
+		will-change: transform, opacity, filter;
+		transform-style: preserve-3d;
+		backface-visibility: hidden;
 		/* Add transitions for smooth visual changes including Z-axis depth effects */
 		transition:
 			border-color 0.2s ease-out,
@@ -519,11 +532,11 @@
 	}
 	.drag-handle {
 		position: absolute;
-		bottom: -26px !important;
+		bottom: -24px !important;
 		left: 50%;
 		transform: translateX(-50%);
 		width: 80px;
-		height: 23px !important;
+		height: 18px !important;
 		cursor: move;
 		display: flex;
 		align-items: center;
@@ -582,10 +595,7 @@
 		cursor: nwse-resize;
 		width: 32px;
 		height: 36px;
-		/* background: rgba(60, 60, 60, 0.9); */
-		/* border: 1px solid rgba(120, 120, 120, 0.8); */
 		border-radius: 6px;
-		/* box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); */
 		z-index: 15;
 		opacity: 0.7;
 		pointer-events: auto;
@@ -593,14 +603,13 @@
 		align-items: center;
 		justify-content: center;
 		transition: all 0.2s ease;
+		transform: scale(1.3);
 		padding: 4px;
 	}
 
 	.resize-handle.handle-se:hover {
 		opacity: 1;
 		background: rgba(80, 80, 80, 0);
-		transform: scale(1.5);
-		/* box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); */
 	}
 
 	.resize-handle.handle-se svg {

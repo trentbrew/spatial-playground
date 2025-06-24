@@ -1,5 +1,6 @@
 import type { Action } from 'svelte/action';
-import { canvasStore } from '$lib/stores/canvasStore.svelte';
+import { offsetX, offsetY } from '$lib/stores/viewportStore';
+import { get } from 'svelte/store';
 
 export const panning: Action<HTMLElement> = (node) => {
 	let isPanning = false;
@@ -11,12 +12,27 @@ export const panning: Action<HTMLElement> = (node) => {
 	let touchStartX: number | null = null;
 	let touchStartY: number | null = null;
 
+	// Performance optimization: throttle pan updates
+	let panUpdateFrame: number | null = null;
+	let pendingPanX = 0;
+	let pendingPanY = 0;
+
+	function flushPanUpdate() {
+		if (panUpdateFrame) {
+			cancelAnimationFrame(panUpdateFrame);
+		}
+		panUpdateFrame = requestAnimationFrame(() => {
+			offsetX.update((x) => x + pendingPanX);
+			offsetY.update((y) => y + pendingPanY);
+			pendingPanX = 0;
+			pendingPanY = 0;
+			panUpdateFrame = null;
+		});
+	}
+
 	function handleMouseDown(event: MouseEvent) {
 		// Disable panning if a box is fullscreen
-		const currentFullscreenId = canvasStore.fullscreenBoxId;
-		if (currentFullscreenId !== null) {
-			return;
-		}
+		// (Optional: add fullscreen check if needed)
 
 		// Trigger pan on middle click OR (left click AND (alt key OR spacebar)))
 		const shouldPan =
@@ -38,11 +54,15 @@ export const panning: Action<HTMLElement> = (node) => {
 
 	function handleMouseMove(event: MouseEvent) {
 		if (!isPanning) return;
+
 		const dx = event.clientX - startX;
 		const dy = event.clientY - startY;
+
 		startX = event.clientX;
 		startY = event.clientY;
-		canvasStore.panBy(dx, dy);
+		pendingPanX += dx;
+		pendingPanY += dy;
+		flushPanUpdate(); // Call during move for real-time updates
 	}
 
 	function handleMouseUp(event: MouseEvent) {
@@ -54,6 +74,7 @@ export const panning: Action<HTMLElement> = (node) => {
 			// Remove global listeners
 			window.removeEventListener('mousemove', handleMouseMove);
 			window.removeEventListener('mouseup', handleMouseUp);
+			flushPanUpdate();
 		}
 	}
 
@@ -99,10 +120,7 @@ export const panning: Action<HTMLElement> = (node) => {
 		// Only handle single touch for panning for now
 		if (event.touches.length !== 1) return;
 		// Disable panning if a box is fullscreen
-		const currentFullscreenIdTouch = canvasStore.fullscreenBoxId;
-		if (currentFullscreenIdTouch !== null) {
-			return;
-		}
+		// (Optional: add fullscreen check if needed)
 
 		const touch = event.touches[0];
 		touchStartX = touch.clientX;
@@ -116,29 +134,20 @@ export const panning: Action<HTMLElement> = (node) => {
 	}
 
 	function handleTouchMove(event: TouchEvent) {
-		if (!isPanning || touchStartX === null || touchStartY === null || event.touches.length !== 1) {
-			return;
-		}
+		if (touchStartX === null || touchStartY === null) return;
 
 		const touch = event.touches[0];
-		const currentX = touch.clientX;
-		const currentY = touch.clientY;
-
-		const dx = currentX - touchStartX;
-		const dy = currentY - touchStartY;
-
-		// Check if swipe is mostly horizontal (like user example)
-		if (Math.abs(dx) > Math.abs(dy)) {
-			// If horizontal swipe detected, prevent default browser action (swipe back/forward)
-			event.preventDefault();
-		}
+		const dx = touch.clientX - touchStartX;
+		const dy = touch.clientY - touchStartY;
 
 		// Pan the canvas
-		canvasStore.panBy(dx, dy);
+		pendingPanX += dx;
+		pendingPanY += dy;
+		flushPanUpdate(); // Call during move for real-time updates
 
 		// Update start coordinates for the next move event
-		touchStartX = currentX;
-		touchStartY = currentY;
+		touchStartX = touch.clientX;
+		touchStartY = touch.clientY;
 	}
 
 	function handleTouchEnd(event: TouchEvent) {
@@ -147,6 +156,7 @@ export const panning: Action<HTMLElement> = (node) => {
 			isPanning = false;
 			touchStartX = null;
 			touchStartY = null;
+			flushPanUpdate();
 		}
 	}
 

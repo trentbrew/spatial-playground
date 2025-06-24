@@ -1,35 +1,6 @@
 <script lang="ts">
-	import { AceEditor } from 'svelte-ace';
-	import 'brace/mode/javascript';
-	import 'brace/mode/typescript';
-	import 'brace/mode/python';
-	import 'brace/mode/java';
-	import 'brace/mode/c_cpp';
-	import 'brace/mode/csharp';
-	import 'brace/mode/golang';
-	import 'brace/mode/rust';
-	import 'brace/mode/php';
-	import 'brace/mode/ruby';
-	import 'brace/mode/swift';
-	import 'brace/mode/scala';
-	import 'brace/mode/html';
-	import 'brace/mode/css';
-	import 'brace/mode/sql';
-	import 'brace/mode/json';
-	import 'brace/mode/yaml';
-	import 'brace/mode/xml';
-	import 'brace/mode/markdown';
-	import 'brace/mode/sh';
-	import 'brace/mode/powershell';
-	import 'brace/mode/dockerfile';
+	import { onMount } from 'svelte';
 
-	import 'brace/theme/monokai';
-	import 'brace/theme/github';
-	import 'brace/theme/tomorrow_night';
-	import 'brace/theme/dracula';
-	import 'brace/theme/twilight';
-
-	// Use $props() rune for component props
 	const {
 		id,
 		content,
@@ -46,8 +17,11 @@
 		isFocused?: boolean;
 	}>();
 
+	let AceEditorComponent: any = null;
 	let aceEditor: any;
 	let isReadOnly = $state(true);
+	let isLoaded = $state(false);
+	let isBrowser = $state(false);
 
 	// Parse content - could be string or object with { code, language }
 	const parsedContent = $derived(() => {
@@ -129,6 +103,53 @@
 	// Get ace mode for language
 	const aceMode = $derived(languageMap[language] || 'text');
 
+	// Dynamic import function for ace editor modules
+	async function loadAceModules() {
+		if (!isBrowser) return;
+
+		try {
+			// Import AceEditor component
+			const { AceEditor } = await import('svelte-ace');
+			AceEditorComponent = AceEditor;
+
+			// Import required modes and themes
+			await Promise.all([
+				import('brace/mode/javascript'),
+				import('brace/mode/typescript'),
+				import('brace/mode/python'),
+				import('brace/mode/java'),
+				import('brace/mode/c_cpp'),
+				import('brace/mode/csharp'),
+				import('brace/mode/golang'),
+				import('brace/mode/rust'),
+				import('brace/mode/php'),
+				import('brace/mode/ruby'),
+				import('brace/mode/swift'),
+				import('brace/mode/scala'),
+				import('brace/mode/html'),
+				import('brace/mode/css'),
+				import('brace/mode/sql'),
+				import('brace/mode/json'),
+				import('brace/mode/yaml'),
+				import('brace/mode/xml'),
+				import('brace/mode/markdown'),
+				import('brace/mode/sh'),
+				import('brace/mode/powershell'),
+				import('brace/mode/dockerfile'),
+				import('brace/mode/text'),
+				import('brace/theme/monokai'),
+				import('brace/theme/github'),
+				import('brace/theme/tomorrow_night'),
+				import('brace/theme/dracula'),
+				import('brace/theme/twilight')
+			]);
+
+			isLoaded = true;
+		} catch (error) {
+			console.error('Failed to load Ace Editor:', error);
+		}
+	}
+
 	function toggleReadOnly() {
 		isReadOnly = !isReadOnly;
 		if (aceEditor) {
@@ -186,6 +207,19 @@
 			}
 		}
 	}
+
+	function handleFallbackInput(event: Event) {
+		const textarea = event.target as HTMLTextAreaElement;
+		updateContent(textarea.value, language);
+	}
+
+	// Load ace modules when component mounts
+	onMount(() => {
+		isBrowser = typeof window !== 'undefined';
+		if (isBrowser) {
+			loadAceModules();
+		}
+	});
 </script>
 
 <div class="code-node" style:background-color={color}>
@@ -211,29 +245,50 @@
 				}}
 				title={isReadOnly ? 'Edit code' : 'Stop editing'}
 			>
-				{isReadOnly ? '✏️' : '✅'}
+				Run
 			</button>
 		</div>
 	</div>
 
-	<!-- Ace Editor -->
+	<!-- Ace Editor Container -->
 	<div class="editor-container">
-		<AceEditor
-			on:input={handleEditorInput}
-			on:init={handleEditorInit}
-			on:commandKey={handleKeyCommand}
-			width="100%"
-			height="100%"
-			lang={aceMode}
-			theme="monokai"
-			value={codeText}
-			options={{
-				readOnly: isReadOnly,
-				highlightActiveLine: !isReadOnly,
-				highlightGutterLine: !isReadOnly,
-				showCursor: !isReadOnly
-			}}
-		/>
+		{#if isBrowser && isLoaded && AceEditorComponent}
+			<svelte:component
+				this={AceEditorComponent}
+				on:input={handleEditorInput}
+				on:init={handleEditorInit}
+				on:commandKey={handleKeyCommand}
+				width="100%"
+				height="100%"
+				lang={aceMode}
+				theme="monokai"
+				value={codeText}
+				options={{
+					readOnly: isReadOnly,
+					highlightActiveLine: !isReadOnly,
+					highlightGutterLine: !isReadOnly,
+					showCursor: !isReadOnly
+				}}
+			/>
+		{:else}
+			<!-- Fallback loading state or simple textarea -->
+			<div class="loading-container">
+				{#if !isBrowser}
+					<div class="loading-message">Initializing...</div>
+				{:else if !isLoaded}
+					<div class="loading-message">Loading editor...</div>
+				{:else}
+					<!-- Simple textarea fallback for SSR or if ace fails to load -->
+					<textarea
+						class="fallback-editor"
+						value={codeText}
+						oninput={handleFallbackInput}
+						onclick={(e) => e.stopPropagation()}
+						placeholder="Enter your code here..."
+					></textarea>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	{#if !codeText}
@@ -321,6 +376,39 @@
 		overflow: hidden;
 	}
 
+	.loading-container {
+		width: 100%;
+		height: 100%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: rgba(0, 0, 0, 0.1);
+	}
+
+	.loading-message {
+		color: rgba(255, 255, 255, 0.6);
+		font-size: 14px;
+	}
+
+	.fallback-editor {
+		width: 100%;
+		height: 100%;
+		background: rgba(0, 0, 0, 0.3);
+		border: none;
+		color: white;
+		padding: 12px;
+		font-family: inherit;
+		font-size: 13px;
+		line-height: 1.4;
+		resize: none;
+		outline: none;
+		tab-size: 2;
+	}
+
+	.fallback-editor::placeholder {
+		color: rgba(255, 255, 255, 0.5);
+	}
+
 	.code-placeholder {
 		position: absolute;
 		top: 50%;
@@ -361,5 +449,25 @@
 
 	:global(.code-node .ace_scrollbar-h) {
 		height: 6px !important;
+	}
+
+	/* Custom scrollbar for fallback editor */
+	.fallback-editor::-webkit-scrollbar {
+		width: 6px;
+		height: 6px;
+	}
+
+	.fallback-editor::-webkit-scrollbar-track {
+		background: rgba(255, 255, 255, 0.1);
+		border-radius: 3px;
+	}
+
+	.fallback-editor::-webkit-scrollbar-thumb {
+		background: rgba(255, 255, 255, 0.3);
+		border-radius: 3px;
+	}
+
+	.fallback-editor::-webkit-scrollbar-thumb:hover {
+		background: rgba(255, 255, 255, 0.5);
 	}
 </style>

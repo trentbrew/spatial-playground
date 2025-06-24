@@ -451,7 +451,7 @@
 			{ selector: '[data-cursor="close-button"]', type: 'close-button' },
 			{ selector: '[data-cursor="ignore"]', type: 'ignore' },
 			{ selector: '.iframe-container', type: 'ignore' },
-			{ selector: '.box', type: 'ignore' }
+			{ selector: '.box', type: 'box' }
 		];
 
 		const cleanup: (() => void)[] = [];
