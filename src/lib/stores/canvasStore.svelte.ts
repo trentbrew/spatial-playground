@@ -19,6 +19,44 @@ import { canvasZeroAdapter } from '$lib/stores/canvasZeroAdapter.svelte';
 import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
 import { get } from 'svelte/store';
 
+// --- Animation Helper for Smooth Zoom/Pan ---
+let zoomPanAnimationFrame: number | null = null;
+function smoothZoomPan(
+	targetZoom: number,
+	targetOffsetX: number,
+	targetOffsetY: number,
+	duration = 600
+) {
+	if (zoomPanAnimationFrame) {
+		cancelAnimationFrame(zoomPanAnimationFrame);
+	}
+	const startZoom = get(zoom);
+	const startOffsetX = get(offsetX);
+	const startOffsetY = get(offsetY);
+	const startTime = performance.now();
+
+	function animate(now: number) {
+		const elapsed = now - startTime;
+		const t = Math.min(elapsed / duration, 1);
+		// Smooth ease-in-out
+		const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+		const currentZoom = startZoom + (targetZoom - startZoom) * eased;
+		const currentOffsetX = startOffsetX + (targetOffsetX - startOffsetX) * eased;
+		const currentOffsetY = startOffsetY + (targetOffsetY - startOffsetY) * eased;
+
+		zoom.set(currentZoom);
+		offsetX.set(currentOffsetX);
+		offsetY.set(currentOffsetY);
+
+		if (t < 1) {
+			zoomPanAnimationFrame = requestAnimationFrame(animate);
+		}
+	}
+
+	zoomPanAnimationFrame = requestAnimationFrame(animate);
+}
+
 // --- Constants ---
 const ZOOM_PADDING_FACTOR = 0.5; // Zoom to 50% of viewport size
 

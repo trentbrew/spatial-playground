@@ -55,7 +55,7 @@
 		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
 		const localX = e.clientX - rect.left;
 		const localY = e.clientY - rect.top;
-		const t = get(transform);
+		const t = transform;
 		const worldX = (localX - t.offsetX) / t.scale;
 		const worldY = (localY - t.offsetY) / t.scale;
 
@@ -92,6 +92,7 @@
 		border-radius: 6px;
 		overflow: hidden;
 		pointer-events: auto;
+		z-index: 9999;
 	}
 	.viewport {
 		position: absolute;

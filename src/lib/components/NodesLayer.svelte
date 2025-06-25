@@ -97,19 +97,23 @@
 			: DOF_EXPLORATION_SHARPNESS_FACTOR;
 		const maxBlur = isFocused ? 16 : 8; // Higher blur when focused for dramatic effect
 
-		// Base blur from depth of field calculation
-		let blurAmount = Math.min(maxBlur, focusDelta * dofSharpnessFactor);
+		let blurAmount = 0;
+		// Apply DOF blur only to foreground (positive z) layers or when a node is actively focused.
+		if (z > 0 || isFocused) {
+			blurAmount = Math.min(maxBlur, focusDelta * dofSharpnessFactor);
+		}
 
-		// Enhanced zoom-dependent blur for very far back nodes
-		// This makes far back nodes more blurry when zoomed out, but still allows them to become sharp when focused
-		if (z <= DEPTH_BLUR_THRESHOLD) {
-			// Calculate zoom-dependent blur that decreases as we zoom in
-			const zoomFactor = 1 / Math.max(0.1, $zoom); // Inverse of zoom, with minimum to prevent extreme values
-			const depthFactor = Math.abs(z) - Math.abs(DEPTH_BLUR_THRESHOLD); // How many levels below threshold
-			const zoomDependentBlur = depthFactor * DEPTH_BLUR_MULTIPLIER * zoomFactor;
+		/*
+		 * Previous behaviour blurred distant BACKGROUND layers (negative-z) when zoomed out.
+		 * To keep background nodes readable we now apply that extra zoom-dependent blur
+		 * only to foreground / positive-z layers.
+		 */
+		if (z > 0) {
+			const zoomFactor = 1 / Math.max(0.1, $zoom); // decreases as you zoom in
+			const depthFactor = z; // higher z ⇒ closer ⇒ more blur
+			const zoomBlur = depthFactor * DEPTH_BLUR_MULTIPLIER * zoomFactor;
 
-			// Add the zoom-dependent blur to the existing DOF blur (rather than replacing it)
-			blurAmount += Math.min(MAX_DEPTH_BLUR - blurAmount, zoomDependentBlur);
+			blurAmount += Math.min(MAX_DEPTH_BLUR - blurAmount, zoomBlur);
 		}
 
 		const brightness = Math.max(0.5, 1.0 - focusDelta * 0.6);

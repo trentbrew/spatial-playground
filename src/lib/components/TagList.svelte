@@ -1,6 +1,7 @@
 <script lang="ts">
 	import TagChip from './TagChip.svelte';
 	import { createEventDispatcher } from 'svelte';
+	import { inputAutoWidth } from '$lib/interactions/inputAutoWidth.svelte';
 
 	// Props via rune
 	let { tags = [] }: { tags?: string[] } = $props();
@@ -30,6 +31,7 @@
 			if (e.key === 'Enter') addTag();
 		}}
 		on:blur={addTag}
+		use:inputAutoWidth={{ minWidth: 40, maxWidth: 400 }}
 	/>
 	{#each tags as t (t)}
 		<TagChip tag={t} on:remove={() => dispatch('remove', { tag: t })} />
@@ -51,9 +53,10 @@
 		border: 1px dashed rgba(255, 255, 255, 0.5);
 		border-radius: 4px;
 		padding: 0px 8px;
+		margin-right: 4px;
 		font-size: 11px;
 		color: #eaeaea;
-		width: 100px;
+		width: 80px;
 		outline: none;
 	}
 	.tag-input::placeholder {

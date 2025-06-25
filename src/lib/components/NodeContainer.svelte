@@ -402,27 +402,6 @@
 					class="node-title-input"
 					placeholder="Untitled Node"
 					use:inputAutoWidth={{ minWidth: 40, maxWidth: 380 }}
-					style="
-						background: none;
-						border: none;
-						outline: none;
-						color: #eaeaea;
-						font-size: 12px;
-						font-weight: 400;
-						padding: 2px 6px;
-						margin: 0;
-						border-radius: 4px;
-						width: auto;
-						flex: 1 1 auto;
-						white-space: nowrap;
-						outline: none !important;
-						box-shadow: none !important;
-						box-sizing: border-box;
-
-						overflow: hidden;
-						text-overflow: ellipsis;
-						opacity: 1;
-					"
 					style:opacity={nodeTitle ? 1 : 0.5}
 					value={nodeTitle || ''}
 					oninput={(e) => {
@@ -854,7 +833,7 @@
 		top: 0;
 		left: 0;
 		width: 100%;
-		height: 38px;
+		height: 36px;
 		background: rgba(24, 24, 24, 0);
 		position: absolute;
 		top: -48px;
@@ -895,16 +874,23 @@
 	}
 
 	.node-title-input {
-		font-size: 12px;
-		outline: none;
-		border: none;
 		background: none;
+		border: none;
+		outline: none;
 		color: #eaeaea;
-		opacity: 1;
+		font-size: 12px;
+		font-weight: 400;
+		padding: 2px 6px;
+		margin-right: 8px;
+		border-radius: 4px;
 		flex: 1 1 auto;
 		white-space: nowrap;
+		outline: none !important;
+		box-shadow: none !important;
+		box-sizing: border-box;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		opacity: 1;
 	}
 
 	.node-title-input::placeholder {
