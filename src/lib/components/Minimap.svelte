@@ -18,30 +18,40 @@
 	const padding = 20;
 
 	$effect(() => {
-		// Recompute bounds whenever boxes change
-		if (boxes.length > 0) {
-			bounds = {
-				minX: Math.min(...boxes.map((b) => b.x)),
-				minY: Math.min(...boxes.map((b) => b.y)),
-				maxX: Math.max(...boxes.map((b) => b.x + b.width)),
-				maxY: Math.max(...boxes.map((b) => b.y + b.height))
-			};
-		}
+		// Recompute bounds and transform whenever the set of boxes changes.
+		if (boxes.length === 0) return;
 
-		const worldW = bounds.maxX - bounds.minX;
-		const worldH = bounds.maxY - bounds.minY;
+		// Compute fresh bounds from the boxes **without** referencing the existing
+		// `bounds` object so that this effect only depends on `boxes`.
+		const newBounds = {
+			minX: Math.min(...boxes.map((b) => b.x)),
+			minY: Math.min(...boxes.map((b) => b.y)),
+			maxX: Math.max(...boxes.map((b) => b.x + b.width)),
+			maxY: Math.max(...boxes.map((b) => b.y + b.height))
+		};
+
+		const worldW = newBounds.maxX - newBounds.minX;
+		const worldH = newBounds.maxY - newBounds.minY;
 		const scale = Math.min((WIDTH - padding) / worldW, (HEIGHT - padding) / worldH);
+
+		// Update the component state.
+		bounds = newBounds;
 		transform = {
 			scale,
-			offsetX: -bounds.minX * scale + (WIDTH - worldW * scale) / 2,
-			offsetY: -bounds.minY * scale + (HEIGHT - worldH * scale) / 2
+			offsetX: -newBounds.minX * scale + (WIDTH - worldW * scale) / 2,
+			offsetY: -newBounds.minY * scale + (HEIGHT - worldH * scale) / 2
 		};
 	});
 
 	$effect(() => {
-		const currentZ = get(zoom);
-		const ox = get(offsetX);
-		const oy = get(offsetY);
+		// Make this effect reactive to viewport changes by referencing the
+		// `zoom`, `offsetX`, and `offsetY` stores directly (via the $ prefix).
+		// We also reference `transform` so the rectangle recalculates when its
+		// scale/offset update after a boxes change.
+		const currentZ = $zoom;
+		const ox = $offsetX;
+		const oy = $offsetY;
+
 		viewRect = {
 			x: (-ox / currentZ) * transform.scale + transform.offsetX,
 			y: (-oy / currentZ) * transform.scale + transform.offsetY,

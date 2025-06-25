@@ -1479,5 +1479,44 @@ export const canvasStore = {
 			await deleteBoxInternal(id);
 			debouncedSave();
 		}
+	},
+
+	/**
+	 * Add a tag to the specified box if it does not already exist.
+	 */
+	async addTag(boxId: number, tag: string) {
+		const boxIndex = boxes.findIndex((b) => b.id === boxId);
+		if (boxIndex === -1) return;
+
+		const box = boxes[boxIndex];
+		// Initialize tags if undefined
+		const currentTags: string[] = Array.isArray(box.tags) ? [...box.tags] : [];
+
+		if (currentTags.includes(tag)) return; // Nothing to do
+
+		const newTags = [...currentTags, tag];
+		boxes[boxIndex] = { ...box, tags: newTags };
+
+		await updateBoxInternal(boxId, { tags: newTags });
+		debouncedSave();
+	},
+
+	/**
+	 * Remove a tag from the specified box if present.
+	 */
+	async removeTag(boxId: number, tag: string) {
+		const boxIndex = boxes.findIndex((b) => b.id === boxId);
+		if (boxIndex === -1) return;
+
+		const box = boxes[boxIndex];
+		const currentTags: string[] = Array.isArray(box.tags) ? [...box.tags] : [];
+
+		if (!currentTags.includes(tag)) return; // Nothing to remove
+
+		const newTags = currentTags.filter((t) => t !== tag);
+		boxes[boxIndex] = { ...box, tags: newTags };
+
+		await updateBoxInternal(boxId, { tags: newTags });
+		debouncedSave();
 	}
 };
