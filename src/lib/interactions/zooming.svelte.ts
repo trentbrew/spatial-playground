@@ -125,7 +125,7 @@ export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefin
 			// Apply
 			offsetX.set(newOffsetX);
 			offsetY.set(newOffsetY);
-			canvasStore.setZoom(newZoom);
+			canvasStore.setZoom(newZoom, { maintainFocus: false });
 			return;
 		}
 

@@ -1219,11 +1219,11 @@ export const canvasStore = {
 	},
 
 	// Set zoom level directly (for slider)
-	setZoom(newZoom: number, { autoUnfocus = false } = {}) {
+	setZoom(newZoom: number, { autoUnfocus = false, maintainFocus = true } = {}) {
 		const clampedZoom = Math.max(0.1, Math.min(10, newZoom)); // Clamp between 0.1x and 10x
 
 		// Debug: Log when zooming occurs while a node is actively focused
-		if (zoomedBoxId !== null && selectedBoxId === zoomedBoxId) {
+		if (maintainFocus && zoomedBoxId !== null && selectedBoxId === zoomedBoxId) {
 			console.log('zooming while focused');
 
 			// Keep the focused box centered while zooming
@@ -1324,154 +1324,5 @@ export const canvasStore = {
 		}, 500); // 500ms flash duration
 
 		console.log(`💥 Box ${boxId} hit the Z-boundary with visual and audio feedback`);
-	},
-
-	// --- New Actions ---
-	toggleAperture() {
-		apertureEnabled = !apertureEnabled;
-	},
-
-	// Clear all boxes and reset selection state for a blank scene
-	clearScene() {
-		boxes = [];
-		selectedBoxId = null;
-		lastSelectedBoxId = null;
-		draggingBoxId = null;
-		ghostedBoxIds = new Set();
-		boundaryHitBoxId = null;
-		fullscreenBoxId = null;
-		zoomedBoxId = null;
-		// Optionally reset zoom and offsets to defaults
-		zoom.set(1);
-		offsetX.set(0);
-		offsetY.set(0);
-		animationDuration = 0;
-		// Log for debugging
-		console.log('🧹 Scene cleared: all boxes removed and state reset');
-	},
-
-	// Delete a box by ID
-	async deleteBox(id: number) {
-		await deleteBox(id);
-	},
-
-	// Persistence management
-	saveStateManually() {
-		saveState();
-	},
-
-	loadStateManually() {
-		loadState();
-	},
-
-	async clearSavedState() {
-		try {
-			// Clear all canvas state and nodes from Zero
-			await canvasZeroAdapter.updateViewport({
-				zoom: 1,
-				offsetX: 0,
-				offsetY: 0,
-				selectedBoxId: null,
-				fullscreenBoxId: null,
-				lastSelectedBoxId: null,
-				persistenceEnabled: true
-			});
-			// Also clear all boxes
-			for (const box of boxes) {
-				await canvasZeroAdapter.deleteBox(box.id);
-			}
-			console.log('🗑️ Zero cache cleared');
-		} catch (error) {
-			console.error('Failed to clear Zero cache:', error);
-		}
-	},
-
-	togglePersistence() {
-		persistenceEnabled = !persistenceEnabled;
-		// Save the new persistence setting to Zero
-		debouncedSave();
-		if (persistenceEnabled) {
-			console.log('✅ Canvas persistence enabled');
-		} else {
-			console.log('⏸️ Canvas persistence disabled');
-		}
-	},
-
-	get persistenceEnabled() {
-		return persistenceEnabled;
-	},
-
-	get hasSavedState() {
-		// Check if we have any boxes or non-default viewport state
-		return boxes.length > 0 || get(zoom) !== 1 || get(offsetX) !== 0 || get(offsetY) !== 0;
-	},
-
-	// --- Tag Helpers ---
-	addTag(boxId: number, tag: string) {
-		console.log('canvasStore.addTag start', { boxId, tag });
-		const boxIndex = boxes.findIndex((b) => b.id === boxId);
-		if (boxIndex === -1) return;
-		const box = boxes[boxIndex];
-		const currentTags = box.tags ? [...box.tags] : [];
-		if (!currentTags.includes(tag)) {
-			currentTags.push(tag);
-			boxes[boxIndex] = { ...box, tags: currentTags };
-			console.log('canvasStore.addTag updated box', boxes[boxIndex]);
-			updateBox(boxId, { tags: currentTags });
-		}
-	},
-
-	removeTag(boxId: number, tag: string) {
-		console.log('canvasStore.removeTag start', { boxId, tag });
-		const boxIndex = boxes.findIndex((b) => b.id === boxId);
-		if (boxIndex === -1) return;
-		const box = boxes[boxIndex];
-		const currentTags = box.tags ? [...box.tags] : [];
-		const newTags = currentTags.filter((t) => t !== tag);
-		boxes[boxIndex] = { ...box, tags: newTags };
-		console.log('canvasStore.removeTag updated box', boxes[boxIndex]);
-		updateBox(boxId, { tags: newTags });
 	}
 };
-
-export function toggleAperture() {
-	apertureEnabled = !apertureEnabled;
-}
-
-// --- Animation Helper for Smooth Zoom/Pan ---
-let zoomPanAnimationFrame: number | null = null;
-function smoothZoomPan(
-	targetZoom: number,
-	targetOffsetX: number,
-	targetOffsetY: number,
-	duration = 600
-) {
-	if (zoomPanAnimationFrame) {
-		cancelAnimationFrame(zoomPanAnimationFrame);
-	}
-	const startZoom = get(zoom);
-	const startOffsetX = get(offsetX);
-	const startOffsetY = get(offsetY);
-	const startTime = performance.now();
-
-	function animate(now: number) {
-		const elapsed = now - startTime;
-		const t = Math.min(elapsed / duration, 1);
-		// Use smoother ease-in-out curve for more polished animation
-		const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-
-		const currentZoom = startZoom + (targetZoom - startZoom) * eased;
-		const currentOffsetX = startOffsetX + (targetOffsetX - startOffsetX) * eased;
-		const currentOffsetY = startOffsetY + (targetOffsetY - startOffsetY) * eased;
-
-		zoom.set(currentZoom);
-		offsetX.set(currentOffsetX);
-		offsetY.set(currentOffsetY);
-
-		if (t < 1) {
-			zoomPanAnimationFrame = requestAnimationFrame(animate);
-		}
-	}
-
-	zoomPanAnimationFrame = requestAnimationFrame(animate);
-}

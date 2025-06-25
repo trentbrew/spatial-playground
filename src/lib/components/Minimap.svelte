@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
-	import { get } from 'svelte/store';
+	import { get, derived } from 'svelte/store';
 
 	const WIDTH = 200;
 	const HEIGHT = 140;
