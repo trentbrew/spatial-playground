@@ -165,16 +165,32 @@
 		updateContent(codeText, select.value);
 	}
 
+	// --- Debounced content updates -----------------------------
+	let pendingUpdate: { code: string; language: string } | null = null;
+	let updateDebounce: ReturnType<typeof setTimeout> | null = null;
+
+	function queueContentUpdate(code: string, lang: string) {
+		pendingUpdate = { code, language: lang };
+		if (updateDebounce) clearTimeout(updateDebounce);
+		updateDebounce = setTimeout(() => {
+			if (pendingUpdate) {
+				import('$lib/stores/canvasStore.svelte').then(({ canvasStore }) => {
+					canvasStore.updateBox(id, {
+						content: {
+							code: pendingUpdate!.code,
+							language: pendingUpdate!.language
+						} as any
+					});
+				});
+			}
+			pendingUpdate = null;
+			updateDebounce = null;
+		}, 400); // 400 ms silence before persisting
+	}
+
+	// Public helper that UI callbacks call
 	function updateContent(newCode: string, newLanguage: string) {
-		// Dispatch update to parent through store
-		import('$lib/stores/canvasStore.svelte').then((module) => {
-			module.canvasStore.updateBox(id, {
-				content: {
-					code: newCode,
-					language: newLanguage
-				} as any
-			});
-		});
+		queueContentUpdate(newCode, newLanguage);
 	}
 
 	function handleEditorInput(event: CustomEvent) {

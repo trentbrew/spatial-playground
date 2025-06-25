@@ -1,7 +1,7 @@
 <script>
 	import '../app.css';
 	import CustomCursor from '$lib/components/CustomCursor.svelte';
-	import { zero } from '$lib/stores/zeroStore.svelte';
+	import { zero } from '$lib/stores/zeroStore';
 	import { onMount } from 'svelte';
 
 	// Initialize Zero client on mount

@@ -15,29 +15,65 @@ import {
 	loadNodes as dbLoadNodes
 } from '$lib/stores/turtleDbStore';
 // Zero sync integration
-import { canvasZeroAdapter } from '$lib/stores/canvasZeroAdapter.svelte';
+import { canvasZeroAdapter } from '$lib/stores/canvasZeroAdapter';
 import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
 import { get } from 'svelte/store';
 
 // --- Animation Helper for Smooth Zoom/Pan ---
 let zoomPanAnimationFrame: number | null = null;
+let isAnimatingZoomPan = false; // Guard to prevent recursive calls
+
 function smoothZoomPan(
 	targetZoom: number,
 	targetOffsetX: number,
 	targetOffsetY: number,
 	duration = 600
 ) {
+	// Prevent recursive animation calls
+	if (isAnimatingZoomPan) {
+		console.warn('🔄 Animation already in progress, skipping new animation request');
+		return;
+	}
+
+	// Cancel any existing animation
 	if (zoomPanAnimationFrame) {
 		cancelAnimationFrame(zoomPanAnimationFrame);
+		zoomPanAnimationFrame = null;
 	}
+
+	// Get initial values once at the start
 	const startZoom = get(zoom);
 	const startOffsetX = get(offsetX);
 	const startOffsetY = get(offsetY);
 	const startTime = performance.now();
 
+	// Early exit if we're already at the target
+	const zoomDiff = Math.abs(targetZoom - startZoom);
+	const offsetXDiff = Math.abs(targetOffsetX - startOffsetX);
+	const offsetYDiff = Math.abs(targetOffsetY - startOffsetY);
+
+	if (zoomDiff < 0.001 && offsetXDiff < 1 && offsetYDiff < 1) {
+		console.log('📍 Already at target position, skipping animation');
+		return;
+	}
+
+	isAnimatingZoomPan = true;
+	console.log('🎬 Starting smooth zoom/pan animation', {
+		from: { zoom: startZoom, x: startOffsetX, y: startOffsetY },
+		to: { zoom: targetZoom, x: targetOffsetX, y: targetOffsetY },
+		duration
+	});
+
 	function animate(now: number) {
+		if (!isAnimatingZoomPan) {
+			// Animation was cancelled
+			zoomPanAnimationFrame = null;
+			return;
+		}
+
 		const elapsed = now - startTime;
 		const t = Math.min(elapsed / duration, 1);
+
 		// Smooth ease-in-out
 		const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 
@@ -45,16 +81,71 @@ function smoothZoomPan(
 		const currentOffsetX = startOffsetX + (targetOffsetX - startOffsetX) * eased;
 		const currentOffsetY = startOffsetY + (targetOffsetY - startOffsetY) * eased;
 
-		zoom.set(currentZoom);
-		offsetX.set(currentOffsetX);
-		offsetY.set(currentOffsetY);
+		// Update stores in a non-reactive way to prevent cycles
+		try {
+			zoom.set(currentZoom);
+			offsetX.set(currentOffsetX);
+			offsetY.set(currentOffsetY);
+		} catch (error) {
+			console.error('❌ Error updating zoom/pan stores:', error);
+			isAnimatingZoomPan = false;
+			zoomPanAnimationFrame = null;
+			return;
+		}
 
 		if (t < 1) {
 			zoomPanAnimationFrame = requestAnimationFrame(animate);
+		} else {
+			// Animation complete
+			console.log('✅ Smooth zoom/pan animation completed');
+			isAnimatingZoomPan = false;
+			zoomPanAnimationFrame = null;
 		}
 	}
 
 	zoomPanAnimationFrame = requestAnimationFrame(animate);
+}
+
+// Function to cancel any ongoing animation
+function cancelZoomPanAnimation() {
+	if (zoomPanAnimationFrame) {
+		cancelAnimationFrame(zoomPanAnimationFrame);
+		zoomPanAnimationFrame = null;
+	}
+	isAnimatingZoomPan = false;
+}
+
+// Helper to compare two box arrays for meaningful changes
+function haveBoxesChanged(oldBoxes: AppBoxState[], newZeroNodes: any[]): boolean {
+	if (oldBoxes.length !== newZeroNodes.length) {
+		return true; // Length changed
+	}
+
+	// Create a map of old boxes for quick lookup
+	const oldBoxMap = new Map(oldBoxes.map((b) => [b.id, b]));
+
+	for (const zeroNode of newZeroNodes) {
+		const id = parseInt(zeroNode.id);
+		const oldBox = oldBoxMap.get(id);
+
+		if (!oldBox) {
+			return true; // A new box was added
+		}
+
+		// Check for changes in key properties that affect layout.
+		// NOTE: Does not check `content` for performance reasons.
+		if (
+			oldBox.x !== zeroNode.x ||
+			oldBox.y !== zeroNode.y ||
+			oldBox.width !== zeroNode.width ||
+			oldBox.height !== zeroNode.height ||
+			oldBox.z !== (zeroNode.z_index || 0)
+		) {
+			return true;
+		}
+	}
+
+	return false; // No significant changes detected
 }
 
 // --- Constants ---
@@ -97,14 +188,20 @@ let apertureEnabled = $state(true);
 // Persistence state
 let persistenceEnabled = $state(true);
 let autoSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+let hasSavedState = $state(false);
 
 // Subscribe to Zero adapter for boxes data ONLY
 let boxes = $state<AppBoxState[]>([]);
 
 if (typeof window !== 'undefined') {
 	canvasZeroAdapter.allNodes.subscribe((zeroNodes) => {
-		if (Array.isArray(zeroNodes) && zeroNodes.length > 0) {
-			console.log('🔄 Zero sync nodes received', zeroNodes.slice(0, 3));
+		if (Array.isArray(zeroNodes)) {
+			// Defend against unnecessary reactive churn from polling.
+			// Only replace the boxes array if the data has actually changed.
+			if (!haveBoxesChanged(boxes, zeroNodes)) {
+				return;
+			}
+			console.log('🔄 Zero sync: nodes changed, updating store.', zeroNodes.slice(0, 3));
 			// Convert Zero nodes to AppBoxState format
 			boxes = zeroNodes.map((node: any) => ({
 				id: parseInt(node.id),
@@ -506,7 +603,7 @@ dbLoadNodes().then(() => {
 });
 
 // --- Update addBox, updateBox, deleteBox to use Zero with TurtleDB fallback ---
-async function addBox(box: AppBoxState) {
+async function addBoxInternal(box: AppBoxState) {
 	try {
 		// Add to Zero first
 		await canvasZeroAdapter.addNode({
@@ -528,7 +625,7 @@ async function addBox(box: AppBoxState) {
 	}
 }
 
-async function updateBox(id: number, partial: Partial<AppBoxState>) {
+async function updateBoxInternal(id: number, partial: Partial<AppBoxState>) {
 	try {
 		// Update in Zero first
 		await canvasZeroAdapter.updateBox(id, partial);
@@ -538,7 +635,7 @@ async function updateBox(id: number, partial: Partial<AppBoxState>) {
 	}
 }
 
-async function deleteBox(id: number) {
+async function deleteBoxInternal(id: number) {
 	try {
 		// Delete from Zero first
 		await canvasZeroAdapter.deleteBox(id);
@@ -683,37 +780,51 @@ export const canvasStore = {
 	get boundaryHitBoxId() {
 		return boundaryHitBoxId;
 	},
+	get persistenceEnabled() {
+		return persistenceEnabled;
+	},
+	get hasSavedState() {
+		return hasSavedState;
+	},
 
-	// Pan the view by a delta (updates current state directly for responsiveness)
+	// --- MUTATIONS ---
+
 	panBy(dx: number, dy: number) {
-		const newOffsetX = get(offsetX) + dx;
-		const newOffsetY = get(offsetY) + dy;
-		offsetX.set(newOffsetX);
-		offsetY.set(newOffsetY);
-		animationDuration = 0; // No animation for panning
-		debouncedSave(); // Save viewport changes
+		offsetX.set(get(offsetX) + dx);
+		offsetY.set(get(offsetY) + dy);
+		debouncedSave();
 	},
 
 	// Set the target viewport state (used by zooming action)
 	setTargetViewport(target: { zoom: number; x: number; y: number }) {
-		animationDuration = 0; // Raw zooming is not animated via store
-		debouncedSave(); // Save viewport changes
+		animationDuration = 0;
+		debouncedSave();
 	},
 
 	// Set the target viewport state with smooth animation
 	setTargetViewportAnimated(target: { zoom: number; x: number; y: number }, duration: number) {
-		animationDuration = duration; // Animate the zoom
+		cancelZoomPanAnimation(); // Cancel any existing animation
+		animationDuration = duration;
+		smoothZoomPan(target.zoom, target.x, target.y, duration);
 	},
 
-	// Set the actual viewport state (used by animation loop)
 	_setViewport(viewport: { zoom: number; x: number; y: number }) {
-		debouncedSave(); // Save viewport changes
+		zoom.set(viewport.zoom);
+		offsetX.set(viewport.x);
+		offsetY.set(viewport.y);
+		debouncedSave();
 	},
 
-	// Add a new box to the canvas with optional collision avoidance
+	setPersistence(enabled: boolean) {
+		persistenceEnabled = enabled;
+	},
+
+	setAperture(enabled: boolean) {
+		apertureEnabled = enabled;
+	},
+
 	async addBox(box: AppBoxState, avoidOverlaps: boolean = true) {
 		if (avoidOverlaps) {
-			// Find a non-overlapping position for the new box, preferring the provided position
 			const position = findNonOverlappingPosition(
 				{ width: box.width, height: box.height, z: box.z },
 				boxes,
@@ -725,20 +836,19 @@ export const canvasStore = {
 			// Create the final box with the collision-free position
 			const finalBox = { ...box, x: position.x, y: position.y };
 			boxes.push(finalBox);
-			await addBox(finalBox); // Save to database
+			await addBoxInternal(finalBox); // Save to database
 		} else {
 			boxes.push(box);
-			await addBox(box); // Save to database
+			await addBoxInternal(box); // Save to database
 		}
 	},
 
-	// Update an existing box by partial properties
 	async updateBox(id: number, partial: Partial<AppBoxState>) {
 		const boxIndex = boxes.findIndex((box) => box.id === id);
 		if (boxIndex !== -1) {
 			const box = boxes[boxIndex];
 			const updatedBox = { ...box, ...partial };
-			// Enforce minimum dimensions here as well
+
 			if (updatedBox.width !== undefined) {
 				updatedBox.width = Math.max(200, updatedBox.width);
 			}
@@ -746,15 +856,13 @@ export const canvasStore = {
 				updatedBox.height = Math.max(200, updatedBox.height);
 			}
 			boxes[boxIndex] = updatedBox;
-			await updateBox(id, partial); // Save to database
-			debouncedSave(); // Also save viewport state
+			await updateBoxInternal(id, partial);
+			debouncedSave();
 		}
 	},
 
-	// Select a box by ID (or clear selection with null)
 	selectBox(id: number | null, viewportWidth?: number, viewportHeight?: number) {
 		if (id !== null) {
-			// If selecting a box, update both selected and lastSelected
 			selectedBoxId = id;
 			lastSelectedBoxId = id;
 
@@ -777,7 +885,6 @@ export const canvasStore = {
 		}
 	},
 
-	// Enter fullscreen for a box
 	enterFullscreen(boxId: number, viewportWidth: number, viewportHeight: number) {
 		const boxIndex = boxes.findIndex((b) => b.id === boxId);
 		if (boxIndex === -1) return;
@@ -837,7 +944,6 @@ export const canvasStore = {
 		animationDuration = FOCUS_TRANSITION_DURATION; // Use the constant
 	},
 
-	// Exit fullscreen mode
 	exitFullscreen() {
 		if (fullscreenBoxId === null || originalBoxState === null) return;
 
@@ -865,7 +971,6 @@ export const canvasStore = {
 		// after the animation completes
 	},
 
-	// Finalize exit fullscreen (called after animation completes)
 	_finalizeExitFullscreen() {
 		fullscreenBoxId = null;
 		originalBoxState = null;
@@ -873,10 +978,15 @@ export const canvasStore = {
 		fullscreenTransitionStartTime = null;
 	},
 
-	// Zoom to a specific box with padding - ensuring perfect centering
 	zoomToBox(boxId: number, viewportWidth: number, viewportHeight: number) {
 		const box = boxes.find((b) => b.id === boxId);
-		if (!box) return;
+		if (!box) {
+			console.warn(`📦 Box ${boxId} not found for zoomToBox`);
+			return;
+		}
+
+		// Cancel any existing animation first
+		cancelZoomPanAnimation();
 
 		const { x, y, width, height, z } = box;
 
@@ -985,30 +1095,27 @@ export const canvasStore = {
 		);
 	},
 
-	// Restore previous zoom level
 	restorePreviousZoom() {
 		if (zoomedBoxId === null) return;
 
-		// Restoring previous zoom
+		// Cancel any existing animation first
+		cancelZoomPanAnimation();
 
 		// Clear the zoomed state first to prevent recursion
 		zoomedBoxId = null;
 
 		// Restore the previous zoom and viewport position
-		animationDuration = FOCUS_TRANSITION_DURATION; // Use the constant
+		smoothZoomPan(prevZoom, prevOffsetX, prevOffsetY, FOCUS_TRANSITION_DURATION);
 	},
 
-	// Set animation state
 	setAnimatingDoublezoom(value: boolean) {
 		isAnimatingDoublezoom = value;
 	},
 
-	// Clear fullscreen animation flag
 	clearAnimatingFullscreen() {
 		isAnimatingFullscreen = false;
 	},
 
-	// Get current state for debugging
 	getState() {
 		return {
 			zoom: get(zoom),
@@ -1039,7 +1146,6 @@ export const canvasStore = {
 		};
 	},
 
-	// Z-axis management functions with zoom following and boundary enforcement
 	moveBoxForward(boxId: number, viewportWidth?: number, viewportHeight?: number) {
 		const boxIndex = boxes.findIndex((box) => box.id === boxId);
 		if (boxIndex !== -1) {
@@ -1132,26 +1238,22 @@ export const canvasStore = {
 		}
 	},
 
-	// Move selected box forward (Cmd+]) with zoom following
 	moveSelectedForward(viewportWidth?: number, viewportHeight?: number) {
 		if (selectedBoxId !== null) {
 			canvasStore.moveBoxForward(selectedBoxId, viewportWidth, viewportHeight);
 		}
 	},
 
-	// Move selected box backward (Cmd+[) with zoom following
 	moveSelectedBackward(viewportWidth?: number, viewportHeight?: number) {
 		if (selectedBoxId !== null) {
 			canvasStore.moveBoxBackward(selectedBoxId, viewportWidth, viewportHeight);
 		}
 	},
 
-	// Get boxes sorted by Z-index for rendering order
 	getBoxesByZIndex() {
 		return [...boxes].sort((a, b) => a.z - b.z);
 	},
 
-	// Regenerate the scene with new random nodes
 	async regenerateScene() {
 		console.log('🖼️ Starting artwork gallery generation...');
 		boxes = await generateRandomBoxes();
@@ -1163,7 +1265,6 @@ export const canvasStore = {
 		);
 	},
 
-	// Set dragging state for parallax suspension
 	setDragging(boxId: number | null) {
 		if (boxId !== null) {
 			// Suspending parallax during drag
@@ -1173,7 +1274,6 @@ export const canvasStore = {
 		draggingBoxId = boxId;
 	},
 
-	// Force clear dragging state (for debugging/emergency cleanup)
 	clearDragging() {
 		if (draggingBoxId !== null) {
 			console.log(`🧹 Force clearing dragging state for Box ${draggingBoxId}`);
@@ -1181,26 +1281,26 @@ export const canvasStore = {
 		}
 	},
 
-	// Center a box in the viewport with smooth animation
 	centerBox(boxId: number, viewportWidth: number, viewportHeight: number) {
 		const box = boxes.find((b) => b.id === boxId);
 		if (!box) return;
+
+		// Cancel any existing animation first
+		cancelZoomPanAnimation();
 
 		// Calculate the center of the box in world coordinates
 		const boxCenterX = box.x + box.width / 2;
 		const boxCenterY = box.y + box.height / 2;
 
 		// Calculate offsets to center the box in the viewport at current zoom
-		const newTargetOffsetX = viewportWidth / 2 - boxCenterX * get(zoom);
-		const newTargetOffsetY = viewportHeight / 2 - boxCenterY * get(zoom);
+		const currentZoom = get(zoom);
+		const newTargetOffsetX = viewportWidth / 2 - boxCenterX * currentZoom;
+		const newTargetOffsetY = viewportHeight / 2 - boxCenterY * currentZoom;
 
 		// Set the animation target for smooth centering
-		animationDuration = 200; // Smooth but quick centering animation
-
-		// Centering box
+		smoothZoomPan(currentZoom, newTargetOffsetX, newTargetOffsetY, 200);
 	},
 
-	// Check for obstruction and ghost blocking nodes
 	checkAndGhostObstructors(boxId: number, viewportWidth: number, viewportHeight: number) {
 		const box = boxes.find((b) => b.id === boxId);
 		if (!box) return;
@@ -1216,47 +1316,54 @@ export const canvasStore = {
 			viewportHeight
 		);
 
-		// Clear previous ghosted nodes
-		ghostedBoxIds.clear();
-
+		// --- NEW: compute next ghosted set but only update store if it changed ---
+		const nextGhosted = new Set<number>();
 		if (obstructionResult.isObstructed && obstructionResult.obstructingBoxes.length > 0) {
-			// Ghost the obstructing boxes
 			obstructionResult.obstructingBoxes.forEach((obstructingBox) => {
-				ghostedBoxIds.add(obstructingBox.id);
+				nextGhosted.add(obstructingBox.id);
 			});
+		}
 
-			console.log(
-				`👻 Ghosting ${obstructionResult.obstructingBoxes.length} obstructing boxes:`,
-				obstructionResult.obstructingBoxes.map((b) => `Box ${b.id}`).join(', ')
-			);
-
-			// Trigger reactivity by creating a new Set
-			ghostedBoxIds = new Set(ghostedBoxIds);
+		// Early-exit if the ghosted set is unchanged. This prevents redundant
+		// store updates that can cascade into deep reactive loops (and ultimately
+		// Svelte's `effect_update_depth_exceeded` safeguard).
+		let changed = false;
+		if (nextGhosted.size !== ghostedBoxIds.size) {
+			changed = true;
 		} else {
-			// If no obstructions, make sure ghosted nodes are cleared
-			// No obstructions found, clearing any ghosted nodes
-			// Trigger reactivity even when clearing
-			ghostedBoxIds = new Set(ghostedBoxIds);
+			for (const id of nextGhosted) {
+				if (!ghostedBoxIds.has(id)) {
+					changed = true;
+					break;
+				}
+			}
+		}
+
+		if (changed) {
+			// Replace the set to trigger reactivity exactly once
+			ghostedBoxIds = nextGhosted;
+			if (nextGhosted.size > 0) {
+				console.log(
+					`👻 Ghosting ${nextGhosted.size} obstructing boxes:`,
+					[...nextGhosted].map((id) => `Box ${id}`).join(', ')
+				);
+			}
 		}
 	},
 
-	// Refresh ghosting for the currently selected box (call this when view changes)
 	refreshGhosting(viewportWidth: number, viewportHeight: number) {
 		if (selectedBoxId !== null) {
 			this.checkAndGhostObstructors(selectedBoxId, viewportWidth, viewportHeight);
 		}
 	},
 
-	// Clear all ghosted nodes
 	clearGhostedNodes() {
 		if (ghostedBoxIds.size > 0) {
 			// Clearing all ghosted nodes
-			ghostedBoxIds.clear();
-			ghostedBoxIds = new Set(ghostedBoxIds); // Trigger reactivity
+			ghostedBoxIds = new Set(); // Trigger reactivity by replacement
 		}
 	},
 
-	// Set zoom level directly (for slider)
 	setZoom(newZoom: number, { autoUnfocus = false, maintainFocus = true } = {}) {
 		const clampedZoom = Math.max(0.1, Math.min(10, newZoom)); // Clamp between 0.1x and 10x
 
@@ -1317,32 +1424,30 @@ export const canvasStore = {
 		zoom.set(clampedZoom);
 	},
 
-	// Unfocus the current node with a slight zoom out for visual feedback
 	unfocusNode() {
 		if (zoomedBoxId === null) return;
 
-		// Unfocusing node
+		// Cancel any existing animation first
+		cancelZoomPanAnimation();
 
 		// Clear the zoomed state and restore previous zoom level
 		const wasZoomedBoxId = zoomedBoxId;
 		zoomedBoxId = null;
 
 		// Restore the previous zoom and viewport position
-		animationDuration = FOCUS_TRANSITION_DURATION;
+		smoothZoomPan(prevZoom, prevOffsetX, prevOffsetY, FOCUS_TRANSITION_DURATION);
 
 		console.log(
-			`🔍 Unfocused Box ${wasZoomedBoxId}, restoring zoom: ${get(zoom).toFixed(2)} → ${get(zoom).toFixed(2)}`
+			`🔍 Unfocused Box ${wasZoomedBoxId}, restoring zoom: ${get(zoom).toFixed(2)} → ${prevZoom.toFixed(2)}`
 		);
 	},
 
-	// Called when view changes to refresh ghosting if needed
 	onViewChange(viewportWidth: number, viewportHeight: number) {
 		if (selectedBoxId) {
 			this.checkAndGhostObstructors(selectedBoxId, viewportWidth, viewportHeight);
 		}
 	},
 
-	// Trigger boundary hit effect when node hits screen surface (Z=0)
 	triggerBoundaryHit(boxId: number) {
 		// Set the boundary hit state for visual feedback
 		boundaryHitBoxId = boxId;
@@ -1362,5 +1467,17 @@ export const canvasStore = {
 		}, 500); // 500ms flash duration
 
 		console.log(`💥 Box ${boxId} hit the Z-boundary with visual and audio feedback`);
+	},
+
+	/**
+	 * Remove a box from local state and persist the deletion.
+	 */
+	async deleteBox(id: number) {
+		const idx = boxes.findIndex((b) => b.id === id);
+		if (idx !== -1) {
+			boxes.splice(idx, 1);
+			await deleteBoxInternal(id);
+			debouncedSave();
+		}
 	}
 };

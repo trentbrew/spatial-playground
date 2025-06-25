@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
-	import { boxResizing } from '$lib/interactions/boxResizing.svelte';
+	import { boxResizing } from '$lib/interactions/boxResizing';
 	import { nodeComponentMap } from '$lib/components/nodeComponentMap';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 	import { FOCUS_TRANSITION_DURATION } from '$lib/constants';
@@ -10,7 +10,7 @@
 	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
 	import type { AppBoxState } from '$lib/canvasState';
 	import TagList from '$lib/components/TagList.svelte';
-	import { inputAutoWidth } from '$lib/interactions/inputAutoWidth.svelte';
+	import { inputAutoWidth } from '$lib/interactions/inputAutoWidth';
 
 	// Icons
 	import {

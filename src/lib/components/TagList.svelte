@@ -1,7 +1,7 @@
 <script lang="ts">
 	import TagChip from './TagChip.svelte';
 	import { createEventDispatcher } from 'svelte';
-	import { inputAutoWidth } from '$lib/interactions/inputAutoWidth.svelte';
+	import { inputAutoWidth } from '$lib/interactions/inputAutoWidth';
 
 	// Props via rune
 	let { tags = [] }: { tags?: string[] } = $props();
@@ -49,7 +49,8 @@
 	}
 
 	.tag-input {
-		background: transparent;
+		background: rgba(0, 0, 0, 0);
+		backdrop-filter: blur(24px) !important;
 		border: 1px dashed rgba(255, 255, 255, 0.5);
 		border-radius: 4px;
 		padding: 0px 8px;

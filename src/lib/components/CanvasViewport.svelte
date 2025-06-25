@@ -6,10 +6,9 @@
 	import type { AppBoxState } from '$lib/canvasState';
 	import BackgroundCanvas from '$lib/components/BackgroundCanvas.svelte';
 	import NodesLayer from '$lib/components/NodesLayer.svelte';
-	import { panning } from '$lib/interactions/panning.svelte.ts';
-	import { zooming } from '$lib/interactions/zooming.svelte.ts';
+	import { panning } from '$lib/interactions/panning';
+	import { zooming } from '$lib/interactions/zooming';
 	import { setViewportContext } from '$lib/contexts/viewportContext';
-	import ControlsOverlay from './ControlsOverlay.svelte';
 	import TracingIndicator from './TracingIndicator.svelte';
 	import ObstructionIndicator from './ObstructionIndicator.svelte';
 	import SceneStats from './SceneStats.svelte';
@@ -609,10 +608,6 @@
 	<NodesLayer />
 </div>
 
-<!-- <SceneStats /> -->
-<!-- <ControlsOverlay /> -->
-<TracingIndicator />
-<ObstructionIndicator />
 <SceneStats />
 <Minimap />
 

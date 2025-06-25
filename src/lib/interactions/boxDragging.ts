@@ -1,5 +1,10 @@
 import { canvasStore } from '$lib/stores/canvasStore.svelte';
 import type { Action } from 'svelte/action';
+import { canvasZeroAdapter } from '$lib/stores/canvasZeroAdapter';
+import { writable } from 'svelte/store';
+
+// Global store indicating whether ANY box is currently being dragged
+export const isDraggingStore = writable(false);
 
 export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 	let startX = 0;
@@ -8,13 +13,14 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 	let initialBoxY = 0;
 	let isDragging = false;
 
-	// We need the viewport dimensions to pass to selectBox
 	let viewportWidth = 0;
 	let viewportHeight = 0;
 
 	function handlePointerDown(event: PointerEvent) {
 		if (event.button !== 0 && event.pointerType === 'mouse') return;
 		if (canvasStore.fullscreenBoxId !== null) return;
+
+		canvasZeroAdapter.pause();
 
 		const viewportEl = node.closest('.viewport');
 		if (viewportEl) {
@@ -32,19 +38,18 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 		startX = event.clientX;
 		startY = event.clientY;
 		isDragging = true;
+		isDraggingStore.set(true);
 
-		// Set dragging state to suspend parallax for this node
 		canvasStore.setDragging(boxId);
 
 		node.setPointerCapture(event.pointerId);
 		node.addEventListener('pointermove', handlePointerMove);
 		node.addEventListener('pointerup', handlePointerUp);
-		node.addEventListener('pointercancel', handlePointerUp); // Handle pointer cancel
+		node.addEventListener('pointercancel', handlePointerUp);
 
-		// Also listen for these events on window to catch edge cases
 		window.addEventListener('pointerup', handlePointerUp);
 		window.addEventListener('pointercancel', handlePointerUp);
-		window.addEventListener('blur', handlePointerUp); // Clear on window blur
+		window.addEventListener('blur', handlePointerUp);
 
 		event.stopPropagation();
 		event.preventDefault();
@@ -52,22 +57,19 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 
 	function handlePointerMove(event: PointerEvent) {
 		if (!isDragging) return;
-
 		const dx = (event.clientX - startX) / canvasStore.zoom;
 		const dy = (event.clientY - startY) / canvasStore.zoom;
-
 		canvasStore.updateBox(boxId, { x: initialBoxX + dx, y: initialBoxY + dy });
 	}
 
 	function handlePointerUp(event: PointerEvent) {
-		if (!isDragging) return; // Guard against multiple calls
+		if (!isDragging) return;
 
 		isDragging = false;
-
-		// Clear dragging state to restore parallax
+		isDraggingStore.set(false);
 		canvasStore.setDragging(null);
+		canvasZeroAdapter.resume();
 
-		// Refresh ghosting after dragging ends, since box position changed
 		if (viewportWidth > 0 && viewportHeight > 0) {
 			canvasStore.onViewChange(viewportWidth, viewportHeight);
 		}
@@ -76,8 +78,6 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 		node.removeEventListener('pointermove', handlePointerMove);
 		node.removeEventListener('pointerup', handlePointerUp);
 		node.removeEventListener('pointercancel', handlePointerUp);
-
-		// Remove window listeners
 		window.removeEventListener('pointerup', handlePointerUp);
 		window.removeEventListener('pointercancel', handlePointerUp);
 		window.removeEventListener('blur', handlePointerUp);
@@ -88,11 +88,13 @@ export const boxDragging: Action<HTMLElement, number> = (node, boxId) => {
 	return {
 		destroy() {
 			node.removeEventListener('pointerdown', handlePointerDown);
-
-			// Safety cleanup: clear dragging state if this box was being dragged
 			if (isDragging && canvasStore.draggingBoxId === boxId) {
 				canvasStore.setDragging(null);
 			}
+			isDraggingStore.set(false);
 		}
 	};
 };
+
+// Attach store for external modules (e.g., CustomCursor)
+(boxDragging as any).isDragging = isDraggingStore;

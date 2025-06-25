@@ -1,6 +1,6 @@
-import { zero, queries, mutators } from './zeroStore.svelte';
+import { zero, queries, mutators } from './zeroStore';
 import type { AppBoxState } from '$lib/canvasState';
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 
 // Helper to convert Zero box format to your AppBoxState format
 function convertZeroBoxToAppBox(zeroBox: any): AppBoxState {
@@ -45,6 +45,7 @@ export class CanvasZeroAdapter {
 
 	// Private properties
 	private pollInterval: ReturnType<typeof setInterval> | null = null;
+	private isPaused = false;
 
 	constructor() {
 		// Subscribe to Zero queries
@@ -53,31 +54,84 @@ export class CanvasZeroAdapter {
 		}
 	}
 
-	async #initializeSubscriptions() {
-		// Poll Zero every 500ms for better responsiveness
-		const pollInterval = setInterval(async () => {
-			try {
-				// Check for canvas state
-				const canvas = await queries.canvasState();
-				if (canvas) {
+	async #poll() {
+		try {
+			// Check for canvas state, but only emit if something actually changed
+			const canvas = await queries.canvasState();
+			if (canvas) {
+				const currentCanvas = get(canvasStateStore);
+				const hasCanvasChanged =
+					!currentCanvas ||
+					currentCanvas.zoom !== canvas.zoom ||
+					currentCanvas.offsetX !== canvas.offsetX ||
+					currentCanvas.offsetY !== canvas.offsetY ||
+					currentCanvas.selectedBoxId !== canvas.selectedBoxId ||
+					currentCanvas.fullscreenBoxId !== canvas.fullscreenBoxId ||
+					currentCanvas.lastSelectedBoxId !== canvas.lastSelectedBoxId;
+
+				if (hasCanvasChanged) {
 					canvasStateStore.set(canvas);
 				}
+			}
 
-				// Check for boxes
-				const boxes = await queries.allBoxes();
-				if (boxes) {
-					boxesStore.set(Array.isArray(boxes) ? boxes : []);
-				}
-			} catch (error) {
-				// Only log actual errors, not expected initial empty state
-				if (error?.message && !error.message.includes('not found')) {
-					console.debug('Zero polling error (expected during startup):', error);
+			// Check for boxes — shallow-compare by id/position/size/z to avoid emitting identical arrays
+			const zeroBoxes = await queries.allBoxes();
+			if (zeroBoxes) {
+				const incoming = Array.isArray(zeroBoxes) ? zeroBoxes : [];
+				const current = get(boxesStore);
+
+				const haveBoxesChanged = () => {
+					if (current.length !== incoming.length) return true;
+					const byId = new Map(current.map((b: any) => [b.id, b]));
+					for (const nb of incoming) {
+						const ob = byId.get(nb.id);
+						if (!ob) return true;
+						if (
+							ob.x !== nb.x ||
+							ob.y !== nb.y ||
+							ob.width !== nb.width ||
+							ob.height !== nb.height ||
+							ob.z_index !== (nb.z_index ?? 0)
+						) {
+							return true;
+						}
+					}
+					return false;
+				};
+
+				if (haveBoxesChanged()) {
+					boxesStore.set(incoming);
 				}
 			}
-		}, 500); // Faster polling for better real-time feel
+		} catch (error) {
+			// Only log actual errors, not expected initial empty state
+			if (error?.message && !error.message.includes('not found')) {
+				console.debug('Zero polling error (expected during startup):', error);
+			}
+		}
+	}
 
-		// Store interval ID for cleanup
-		this.pollInterval = pollInterval;
+	async #initializeSubscriptions() {
+		// Poll Zero every 500ms for better responsiveness
+		this.pollInterval = setInterval(async () => {
+			if (this.isPaused) return; // Skip polling if paused
+			await this.#poll();
+		}, 500); // Faster polling for better real-time feel
+	}
+
+	// --- Polling control methods ---
+	pause() {
+		if (!this.isPaused) {
+			this.isPaused = true;
+			console.log('Adapter polling PAUSED');
+		}
+	}
+
+	resume() {
+		if (this.isPaused) {
+			this.isPaused = false;
+			console.log('Adapter polling RESUMED');
+		}
 	}
 
 	// Current values (non-reactive)
@@ -135,6 +189,13 @@ export class CanvasZeroAdapter {
 		tags?: string[];
 	}) {
 		const id = Date.now().toString(); // Simple ID for now
+
+		// Tags must be stored inside the content object for ZeroDB.
+		const finalContent =
+			typeof box.content === 'object' && box.content !== null
+				? { ...box.content, tags: box.tags || [] }
+				: { body: box.content, tags: box.tags || [] };
+
 		await mutators.addBox({
 			id,
 			x: box.x,
@@ -143,25 +204,46 @@ export class CanvasZeroAdapter {
 			height: box.height,
 			z_index: box.z ?? 0, // Use provided z or default to 0
 			type: box.type,
-			content: box.content,
-			tags: box.tags || []
+			content: finalContent
 		});
 	}
 
 	async updateBox(id: number, updates: Partial<AppBoxState>) {
-		const zeroUpdates: any = {
-			x: updates.x,
-			y: updates.y,
-			width: updates.width,
-			height: updates.height,
-			z_index: updates.z, // Persist z-index if present
-			content: updates.content,
-			tags: updates.tags
-		};
+		const { tags, content, ...rest } = updates;
+
+		// Remap z to z_index for the database
+		const zeroUpdates: any = { ...rest };
+		if (zeroUpdates.z !== undefined) {
+			zeroUpdates.z_index = zeroUpdates.z;
+			delete zeroUpdates.z;
+		}
+
+		// If 'content' or 'tags' are part of the update, they must be merged
+		// and sent inside a 'content' field. This assumes the backend deep-merges
+		// the content object, which is standard for such operations.
+		if (content !== undefined || tags !== undefined) {
+			const contentUpdate: any = {};
+			if (content !== undefined) {
+				// If content is a primitive, wrap it in an object.
+				if (typeof content === 'object' && content !== null) {
+					Object.assign(contentUpdate, content);
+				} else {
+					contentUpdate.body = content;
+				}
+			}
+			if (tags !== undefined) {
+				contentUpdate.tags = tags;
+			}
+			zeroUpdates.content = contentUpdate;
+		}
+
 		const cleanUpdates = Object.fromEntries(
 			Object.entries(zeroUpdates).filter(([_, value]) => value !== undefined)
 		);
-		await mutators.updateBox(id.toString(), cleanUpdates);
+
+		if (Object.keys(cleanUpdates).length > 0) {
+			await mutators.updateBox(id.toString(), cleanUpdates);
+		}
 	}
 
 	async deleteBox(id: number) {

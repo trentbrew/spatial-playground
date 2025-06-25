@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { browser } from '$app/environment';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
-	import { boxDragging } from '$lib/interactions/boxDragging.svelte.ts';
+	import { boxDragging } from '$lib/interactions/boxDragging';
 
 	let cursorElement: HTMLDivElement;
 	let trailElements: HTMLDivElement[] = [];
