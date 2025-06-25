@@ -12,7 +12,8 @@ function convertZeroBoxToAppBox(zeroBox: any): AppBoxState {
 		height: zeroBox.height,
 		z: zeroBox.z_index ?? 0, // Use z_index from Zero
 		type: zeroBox.type,
-		content: zeroBox.content || {},
+		content: zeroBox.content,
+		tags: zeroBox.tags || zeroBox.content?.tags || [],
 		color: '#2a2a2a' // Default color
 	};
 }
@@ -27,7 +28,8 @@ function convertAppBoxToZero(appBox: AppBoxState): any {
 		height: appBox.height,
 		z_index: appBox.z, // Persist z-index
 		type: appBox.type,
-		content: appBox.content
+		content: appBox.content,
+		tags: appBox.tags || []
 	};
 }
 
@@ -130,6 +132,7 @@ export class CanvasZeroAdapter {
 		type: string;
 		content: any;
 		z?: number;
+		tags?: string[];
 	}) {
 		const id = Date.now().toString(); // Simple ID for now
 		await mutators.addBox({
@@ -140,7 +143,8 @@ export class CanvasZeroAdapter {
 			height: box.height,
 			z_index: box.z ?? 0, // Use provided z or default to 0
 			type: box.type,
-			content: box.content
+			content: box.content,
+			tags: box.tags || []
 		});
 	}
 
@@ -151,7 +155,8 @@ export class CanvasZeroAdapter {
 			width: updates.width,
 			height: updates.height,
 			z_index: updates.z, // Persist z-index if present
-			content: updates.content
+			content: updates.content,
+			tags: updates.tags
 		};
 		const cleanUpdates = Object.fromEntries(
 			Object.entries(zeroUpdates).filter(([_, value]) => value !== undefined)

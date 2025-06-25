@@ -66,6 +66,7 @@ let boxes = $state<AppBoxState[]>([]);
 if (typeof window !== 'undefined') {
 	canvasZeroAdapter.allNodes.subscribe((zeroNodes) => {
 		if (Array.isArray(zeroNodes) && zeroNodes.length > 0) {
+			console.log('🔄 Zero sync nodes received', zeroNodes.slice(0, 3));
 			// Convert Zero nodes to AppBoxState format
 			boxes = zeroNodes.map((node: any) => ({
 				id: parseInt(node.id),
@@ -76,6 +77,7 @@ if (typeof window !== 'undefined') {
 				z: node.z_index || 0,
 				type: node.type,
 				content: node.content || {},
+				tags: node.tags || [],
 				color: '#2a2a2a' // Default color
 			}));
 		}
@@ -388,8 +390,9 @@ async function generateRandomBoxes(): Promise<AppBoxState[]> {
 			color: defaultColor,
 			content: imagePath, // Use the image path as content
 			type: 'image',
-			z
-		});
+			z,
+			tags: []
+		} as AppBoxState);
 	});
 
 	const sortedBoxes = boxes.sort((a, b) => a.z - b.z); // Sort by z-index for proper rendering
@@ -474,8 +477,11 @@ async function addBox(box: AppBoxState) {
 			width: box.width,
 			height: box.height,
 			type: box.type,
-			content: box.content
-		});
+			content: box.content,
+			// @ts-ignore extra fields tolerated by backend
+			tags: box.tags,
+			color: box.color
+		} as any);
 	} catch (error) {
 		console.warn('Failed to add box to Zero, using TurtleDB fallback:', error);
 		// Convert numeric ID to string for TurtleDB compatibility
@@ -1216,6 +1222,32 @@ export const canvasStore = {
 	setZoom(newZoom: number, { autoUnfocus = false } = {}) {
 		const clampedZoom = Math.max(0.1, Math.min(10, newZoom)); // Clamp between 0.1x and 10x
 
+		// Debug: Log when zooming occurs while a node is actively focused
+		if (zoomedBoxId !== null && selectedBoxId === zoomedBoxId) {
+			console.log('zooming while focused');
+
+			// Keep the focused box centered while zooming
+			const focusedBox = boxes.find((b) => b.id === zoomedBoxId);
+			if (focusedBox) {
+				const oldZoom = get(zoom);
+				const boxCenterX = focusedBox.x + focusedBox.width / 2;
+				const boxCenterY = focusedBox.y + focusedBox.height / 2;
+
+				// Current screen position of the box center
+				const screenCenterX = boxCenterX * oldZoom + get(offsetX);
+				const screenCenterY = boxCenterY * oldZoom + get(offsetY);
+
+				// Compute new offsets so the box stays at the same screen position after zoom
+				const newOffsetX = screenCenterX - boxCenterX * clampedZoom;
+				const newOffsetY = screenCenterY - boxCenterY * clampedZoom;
+
+				// Apply the new offsets immediately (no animation)
+				offsetX.set(newOffsetX);
+				offsetY.set(newOffsetY);
+				animationDuration = 0;
+			}
+		}
+
 		// Only auto-unfocus when explicitly requested (e.g., from keyboard shortcuts or UI buttons)
 		// Don't auto-unfocus during continuous gestures like pinch zoom
 		if (autoUnfocus && zoomedBoxId !== null) {
@@ -1372,6 +1404,33 @@ export const canvasStore = {
 	get hasSavedState() {
 		// Check if we have any boxes or non-default viewport state
 		return boxes.length > 0 || get(zoom) !== 1 || get(offsetX) !== 0 || get(offsetY) !== 0;
+	},
+
+	// --- Tag Helpers ---
+	addTag(boxId: number, tag: string) {
+		console.log('canvasStore.addTag start', { boxId, tag });
+		const boxIndex = boxes.findIndex((b) => b.id === boxId);
+		if (boxIndex === -1) return;
+		const box = boxes[boxIndex];
+		const currentTags = box.tags ? [...box.tags] : [];
+		if (!currentTags.includes(tag)) {
+			currentTags.push(tag);
+			boxes[boxIndex] = { ...box, tags: currentTags };
+			console.log('canvasStore.addTag updated box', boxes[boxIndex]);
+			updateBox(boxId, { tags: currentTags });
+		}
+	},
+
+	removeTag(boxId: number, tag: string) {
+		console.log('canvasStore.removeTag start', { boxId, tag });
+		const boxIndex = boxes.findIndex((b) => b.id === boxId);
+		if (boxIndex === -1) return;
+		const box = boxes[boxIndex];
+		const currentTags = box.tags ? [...box.tags] : [];
+		const newTags = currentTags.filter((t) => t !== tag);
+		boxes[boxIndex] = { ...box, tags: newTags };
+		console.log('canvasStore.removeTag updated box', boxes[boxIndex]);
+		updateBox(boxId, { tags: newTags });
 	}
 };
 

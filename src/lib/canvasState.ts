@@ -7,6 +7,7 @@ export interface BoxState {
 	content: any; // Allow flexible content (string, object, etc.)
 	color: string;
 	z: number; // Z-axis position for parallax depth
+	tags?: string[];
 }
 
 // Define the extended type here

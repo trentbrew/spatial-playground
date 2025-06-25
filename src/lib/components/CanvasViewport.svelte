@@ -34,6 +34,7 @@
 		Shuffle
 	} from '@lucide/svelte';
 	import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
+	import Minimap from '$lib/components/Minimap.svelte';
 
 	// --- Constants ---
 	const SMOOTHING_FACTOR = 0.4;
@@ -609,9 +610,11 @@
 </div>
 
 <!-- <SceneStats /> -->
-<ControlsOverlay />
+<!-- <ControlsOverlay /> -->
 <TracingIndicator />
 <ObstructionIndicator />
+<SceneStats />
+<Minimap />
 
 <ContextMenu
 	visible={cmVisible}

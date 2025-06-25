@@ -13,7 +13,7 @@
 		isFocused
 	}: {
 		id: number;
-		content: string;
+		content: any;
 		color: string;
 		isSelected: boolean;
 		isFullscreen: boolean;
@@ -25,14 +25,22 @@
 	let isEditingUrl = $state(false);
 	let inputElement = $state<HTMLInputElement>();
 
+	// Extract URL string regardless of whether content is string or object
+	const contentStr =
+		typeof content === 'string'
+			? content
+			: content && typeof content === 'object'
+				? (content.url ?? content.body ?? content.text ?? '')
+				: '';
+
 	// Check if we have a valid URL to display
-	const hasValidUrl = $derived(content && content.match(/^https?:\/\/.+/));
-	const isInitialState = $derived(!content || content.trim() === '');
+	const hasValidUrl = $derived(contentStr && contentStr.match(/^https?:\/\/.+/));
+	const isInitialState = $derived(!contentStr || contentStr.trim() === '');
 
 	// Initialize URL input with current content
 	$effect(() => {
 		if (hasValidUrl && !isEditingUrl) {
-			urlInput = content;
+			urlInput = contentStr;
 		}
 	});
 
@@ -53,13 +61,13 @@
 		} else if (event.key === 'Escape') {
 			event.preventDefault();
 			isEditingUrl = false;
-			urlInput = content || '';
+			urlInput = contentStr || '';
 		}
 	}
 
 	function startEditing() {
 		isEditingUrl = true;
-		urlInput = content || '';
+		urlInput = contentStr || '';
 		// Focus input after state update
 		setTimeout(() => {
 			inputElement?.focus();
@@ -131,7 +139,7 @@
 						title="Click to edit URL"
 					>
 						<span class="protocol"><Lock class="mr-2 h-4 w-4" /></span>
-						<span class="domain">{getDomainFromUrl(content)}</span>
+						<span class="domain">{getDomainFromUrl(contentStr)}</span>
 					</div>
 					<!-- <button onclick={startEditing} class="edit-btn" title="Edit URL">⚡</button> -->
 				{/if}
@@ -140,7 +148,7 @@
 			<!-- Embedded content -->
 			<div class="iframe-container">
 				<iframe
-					src={content}
+					src={contentStr}
 					title="Embed {id}"
 					allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
 					allowfullscreen

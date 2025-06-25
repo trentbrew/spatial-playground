@@ -1,6 +1,7 @@
 import type { Action } from 'svelte/action';
 import { canvasStore } from '$lib/stores/canvasStore.svelte';
 import { get } from 'svelte/store';
+import { zoom as zoomStore, offsetX, offsetY } from '$lib/stores/viewportStore';
 
 // Constants
 const ZOOM_SPEED_FACTOR = 0.005;
@@ -99,12 +100,32 @@ export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefin
 		const isZoomGesture = event.ctrlKey || event.metaKey;
 
 		if (isZoomGesture) {
-			// Calculate zoom delta based on wheel movement – smaller multiplier for finer control
-			const zoomDelta = -event.deltaY * 0.0015; // tuned for smoother response
-			targetZoomValue *= 1 + zoomDelta;
-			targetZoomValue = Math.max(0.1, Math.min(5, targetZoomValue));
+			// Anchor zoom to cursor / gesture center
+			const rect = node.getBoundingClientRect();
+			const cursorX = event.clientX - rect.left;
+			const cursorY = event.clientY - rect.top;
 
-			kickSmoothZoom();
+			const currentZoom = get(zoomStore);
+			const currentOffsetX = get(offsetX);
+			const currentOffsetY = get(offsetY);
+
+			// Delta zoom factor (trackpad usually small deltas)
+			const zoomDelta = -event.deltaY * 0.0015; // tune sensitivity
+			let newZoom = currentZoom * (1 + zoomDelta);
+			newZoom = Math.max(0.1, Math.min(5, newZoom));
+
+			// Compute world coordinates under cursor before zoom
+			const worldX = (cursorX - currentOffsetX) / currentZoom;
+			const worldY = (cursorY - currentOffsetY) / currentZoom;
+
+			// Compute new offsets so that world point stays under cursor
+			const newOffsetX = cursorX - worldX * newZoom;
+			const newOffsetY = cursorY - worldY * newZoom;
+
+			// Apply
+			offsetX.set(newOffsetX);
+			offsetY.set(newOffsetY);
+			canvasStore.setZoom(newZoom);
 			return;
 		}
 

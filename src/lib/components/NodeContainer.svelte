@@ -9,6 +9,8 @@
 	import { getFocusZoomForZ } from '$lib/utils/depth';
 	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
 	import type { AppBoxState } from '$lib/canvasState';
+	import TagList from '$lib/components/TagList.svelte';
+	import { inputAutoWidth } from '$lib/interactions/inputAutoWidth.svelte';
 
 	// Icons
 	import {
@@ -16,6 +18,7 @@
 		File,
 		Pin,
 		Settings2,
+		Pencil,
 		Clapperboard,
 		AudioLines,
 		SquarePen,
@@ -28,12 +31,14 @@
 		Copy,
 		ArrowUp,
 		ArrowDown,
-		Trash
+		Trash,
+		ChevronsUp,
+		ChevronsDown
 	} from 'lucide-svelte';
 
 	// Icon mapping for node types
 	const nodeTypeIcons: Record<string, any> = {
-		sticky: SquarePen,
+		sticky: Pencil,
 		image: Image,
 		embed: Globe,
 		file: File,
@@ -124,6 +129,20 @@
 	// Add local state for flipping and pinning
 	let showSettingsBack = $state(false);
 	let isPinned = $state(false); // Demo fallback, real pin logic to be added
+
+	// Tag handlers
+	function addTag(tag: string) {
+		console.log('NodeContainer addTag', tag);
+		canvasStore.addTag(box.id, tag);
+		// Optimistically update local box reference to keep tag visible
+		box = { ...box, tags: [...(box.tags || []), tag] };
+	}
+
+	function removeTag(tag: string) {
+		console.log('NodeContainer removeTag', tag);
+		canvasStore.removeTag(box.id, tag);
+		box = { ...box, tags: (box.tags || []).filter((t) => t !== tag) };
+	}
 
 	function handleClick(event: MouseEvent) {
 		// If the box is already focused, do nothing to allow content interaction.
@@ -246,6 +265,24 @@
 		showSettingsBack = true;
 	}
 
+	// Move node forward in Z-order
+	function handleSendForward(event: MouseEvent) {
+		event.stopPropagation();
+
+		// Ensure this box is selected so store helpers target it
+		canvasStore.selectBox(box.id, viewportWidth, viewportHeight);
+		// Move selected box forward one layer
+		canvasStore.moveSelectedForward(viewportWidth, viewportHeight);
+	}
+
+	// Move node backward in Z-order
+	function handleSendBackward(event: MouseEvent) {
+		event.stopPropagation();
+
+		canvasStore.selectBox(box.id, viewportWidth, viewportHeight);
+		canvasStore.moveSelectedBackward(viewportWidth, viewportHeight);
+	}
+
 	function handleBackFromSettings(event: MouseEvent) {
 		event.stopPropagation();
 		showSettingsBack = false;
@@ -364,6 +401,7 @@
 					type="text"
 					class="node-title-input"
 					placeholder="Untitled Node"
+					use:inputAutoWidth={{ minWidth: 40, maxWidth: 380 }}
 					style="
 						background: none;
 						border: none;
@@ -398,12 +436,17 @@
 						canvasStore.updateBox(box.id, { content: newContent });
 					}}
 				/>
-				<!-- <button class="node-close pin-btn" title="Pin" aria-label="Pin node" onclick={handlePin}>
-					<Pin fill={isPinned ? 'yellow' : 'none'} class="h-5 w-5" />
-				</button> -->
-				<!-- <button class="node-close" title="Settings" aria-label="Settings" onclick={handleSettings}>
-					<Settings2 class="h-5 w-5" />
-				</button> -->
+				<TagList
+					tags={box.tags || []}
+					on:add={(e) => {
+						console.log('addTag', e.detail.tag);
+						addTag(e.detail.tag);
+					}}
+					on:remove={(e) => {
+						console.log('removeTag', e.detail.tag);
+						removeTag(e.detail.tag);
+					}}
+				/>
 				<button class="node-close" title="Close" aria-label="Delete node" onclick={handleClose}>
 					<X class="h-5 w-5" />
 				</button>
@@ -584,8 +627,8 @@
 
 	.close-button:hover {
 		opacity: 1;
-		background-color: rgba(255, 0, 0, 0.1);
-		color: #ff4444;
+		/* background-color: rgba(255, 0, 0, 0.1); */
+		/* color: #ff4444; */
 	}
 	/* Single corner resize handle (bottom-right) - custom SVG style */
 	.resize-handle.handle-se {
@@ -876,18 +919,21 @@
 		cursor: pointer;
 		/* opacity: 0.7; */
 		margin-left: 12px;
-		border-radius: 4px;
-		padding: 0 8px;
+		border-radius: 50%;
+		padding: 0;
+		width: 32px;
+		transform: translateY(-2px);
+		height: 32px;
 		transition:
 			background 0.15s,
 			opacity 0.15s;
 		align-self: center;
 		display: flex;
 		align-items: center;
-		height: 42px !important;
+		justify-content: center;
 	}
 	.node-close:hover {
-		background: rgba(255, 0, 0, 0.13);
+		background: rgba(255, 255, 255, 0.13);
 		color: cyan;
 	}
 
