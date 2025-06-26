@@ -1495,9 +1495,16 @@ export const canvasStore = {
 		if (currentTags.includes(tag)) return; // Nothing to do
 
 		const newTags = [...currentTags, tag];
-		boxes[boxIndex] = { ...box, tags: newTags };
 
-		await updateBoxInternal(boxId, { tags: newTags });
+		// Merge tags into the content object so ZeroDB doesn't wipe other fields.
+		const mergedContent =
+			typeof box.content === 'object' && box.content !== null
+				? { ...box.content, tags: newTags }
+				: { body: box.content, tags: newTags };
+
+		boxes[boxIndex] = { ...box, tags: newTags, content: mergedContent };
+
+		await updateBoxInternal(boxId, { content: mergedContent });
 		debouncedSave();
 	},
 
@@ -1514,9 +1521,15 @@ export const canvasStore = {
 		if (!currentTags.includes(tag)) return; // Nothing to remove
 
 		const newTags = currentTags.filter((t) => t !== tag);
-		boxes[boxIndex] = { ...box, tags: newTags };
 
-		await updateBoxInternal(boxId, { tags: newTags });
+		const mergedContent =
+			typeof box.content === 'object' && box.content !== null
+				? { ...box.content, tags: newTags }
+				: { body: box.content, tags: newTags };
+
+		boxes[boxIndex] = { ...box, tags: newTags, content: mergedContent };
+
+		await updateBoxInternal(boxId, { content: mergedContent });
 		debouncedSave();
 	}
 };

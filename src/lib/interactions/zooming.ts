@@ -165,15 +165,15 @@ export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefin
 		if (isZoomGesture) {
 			totalZoomUpdates++;
 
-			// Cache rect to avoid repeated DOM queries
 			const rect = node.getBoundingClientRect();
 			const cursorX = event.clientX - rect.left;
 			const cursorY = event.clientY - rect.top;
 
-			// Use cached values for better performance
-			updateCache();
+			// Fetch the latest viewport values DIRECTLY so they include any recent pan.
+			cachedZoom = get(zoomStore);
+			cachedOffsetX = get(offsetX);
+			cachedOffsetY = get(offsetY);
 
-			// Optimized zoom calculation
 			const zoomDelta = -event.deltaY * ZOOM_SPEED_FACTOR;
 			let newZoom = cachedZoom * (1 + zoomDelta);
 
@@ -206,7 +206,7 @@ export const zooming: Action<HTMLElement, { preventDefault?: boolean } | undefin
 				world: { x: worldX, y: worldY }
 			});
 
-			// Batch the updates
+			// Apply the new offsets immediately
 			offsetX.set(newOffsetX);
 			offsetY.set(newOffsetY);
 

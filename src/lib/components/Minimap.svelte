@@ -75,9 +75,57 @@
 		offsetX.set(newOffsetX);
 		offsetY.set(newOffsetY);
 	}
+
+	// --- Drag-to-pan support ---
+	let isDragging = false;
+
+	function worldCoordsFromEvent(e: PointerEvent) {
+		const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		const localX = e.clientX - rect.left;
+		const localY = e.clientY - rect.top;
+		const t = transform;
+		const worldX = (localX - t.offsetX) / t.scale;
+		const worldY = (localY - t.offsetY) / t.scale;
+		return { worldX, worldY };
+	}
+
+	function centerViewportOn(worldX: number, worldY: number) {
+		const currentZ = get(zoom);
+		const newOffsetX = innerWidth / 2 - worldX * currentZ;
+		const newOffsetY = innerHeight / 2 - worldY * currentZ;
+		offsetX.set(newOffsetX);
+		offsetY.set(newOffsetY);
+	}
+
+	function handlePointerDown(e: PointerEvent) {
+		isDragging = true;
+		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		const { worldX, worldY } = worldCoordsFromEvent(e);
+		centerViewportOn(worldX, worldY);
+	}
+
+	function handlePointerMove(e: PointerEvent) {
+		if (!isDragging) return;
+		const { worldX, worldY } = worldCoordsFromEvent(e);
+		centerViewportOn(worldX, worldY);
+	}
+
+	function handlePointerUp(e: PointerEvent) {
+		if (!isDragging) return;
+		isDragging = false;
+		(e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+	}
 </script>
 
-<div class="minimap" style="width:{WIDTH}px;height:{HEIGHT}px" on:click={handleClick}>
+<div
+	class="minimap"
+	style="width:{WIDTH}px;height:{HEIGHT}px"
+	on:click={handleClick}
+	on:pointerdown={handlePointerDown}
+	on:pointermove={handlePointerMove}
+	on:pointerup={handlePointerUp}
+	on:pointerleave={handlePointerUp}
+>
 	{#each boxes as b (b.id)}
 		<div
 			class="box"
