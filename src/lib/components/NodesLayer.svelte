@@ -13,7 +13,9 @@
 		DEPTH_BLUR_FACTOR,
 		MAX_DEPTH_BLUR,
 		DEPTH_OPACITY_REDUCTION,
-		MIN_DEPTH_OPACITY
+		MIN_DEPTH_OPACITY,
+		ZOOM_IN_BLUR_THRESHOLD,
+		ZOOM_IN_BLUR_MULTIPLIER
 	} from '$lib/constants';
 	import { getViewportContext } from '$lib/contexts/viewportContext';
 	import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
@@ -114,6 +116,13 @@
 			const zoomBlur = depthFactor * DEPTH_BLUR_MULTIPLIER * zoomFactor;
 
 			blurAmount += Math.min(MAX_DEPTH_BLUR - blurAmount, zoomBlur);
+
+			// Extra blur when the camera is zoomed in very close to the scene
+			if ($zoom > ZOOM_IN_BLUR_THRESHOLD && z >= 0) {
+				const zoomInFactor = $zoom - ZOOM_IN_BLUR_THRESHOLD;
+				const zoomedInBlur = zoomInFactor * ZOOM_IN_BLUR_MULTIPLIER;
+				blurAmount += Math.min(MAX_DEPTH_BLUR - blurAmount, zoomedInBlur);
+			}
 		}
 
 		const brightness = Math.max(0.5, 1.0 - focusDelta * 0.6);

@@ -11,7 +11,7 @@ export const DOF_SHARPNESS_FACTOR = 5;
 
 // Dynamic depth of field - much more dramatic when a node is focused
 export const DOF_FOCUSED_SHARPNESS_FACTOR = 4; // Shallow depth when focused
-export const DOF_EXPLORATION_SHARPNESS_FACTOR = 5; // Wide depth for exploration
+export const DOF_EXPLORATION_SHARPNESS_FACTOR = 8; // Stronger blur when freely exploring
 
 // Enhanced depth blur for very far back nodes (z <= -2)
 export const DEPTH_BLUR_THRESHOLD = -2; // Z-level threshold for enhanced blur
@@ -20,6 +20,10 @@ export const DEPTH_BLUR_FACTOR = 3; // Factor for calculating depth blur
 export const MAX_DEPTH_BLUR = 20; // Maximum blur amount in pixels
 export const DEPTH_OPACITY_REDUCTION = 0.15; // Opacity reduction per z-level for far back nodes
 export const MIN_DEPTH_OPACITY = 0.3; // Minimum opacity for far back nodes
+
+// Additional blur for foreground nodes when zoomed in very close
+export const ZOOM_IN_BLUR_THRESHOLD = 1.8; // Global zoom scale at which extra foreground blur starts
+export const ZOOM_IN_BLUR_MULTIPLIER = 4.0; // Stronger additional blur per zoom unit
 
 // Default dimensions for different node types
 export const DEFAULT_NODE_DIMENSIONS = {

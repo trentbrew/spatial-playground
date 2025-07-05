@@ -1,0 +1,40 @@
+[
+	{
+		"id": 1,
+		"x": -300,
+		"y": -200,
+		"width": 240,
+		"height": 160,
+		"z": 0,
+		"type": "sticky",
+		"content": {
+			"body": "Welcome to Canvas Engine!\nDouble-click me to edit. 🚀"
+		},
+		"tags": ["demo"]
+	},
+	{
+		"id": 2,
+		"x": 200,
+		"y": -100,
+		"width": 320,
+		"height": 240,
+		"z": 1,
+		"type": "image",
+		"content": "/artwork/alien.jpg",
+		"tags": ["art"]
+	},
+	{
+		"id": 3,
+		"x": -100,
+		"y": 200,
+		"width": 300,
+		"height": 200,
+		"z": 2,
+		"type": "code",
+		"content": {
+			"body": "function hello() {\n  console.log('Hello, world!');\n}",
+			"language": "javascript"
+		},
+		"tags": ["code", "demo"]
+	}
+]

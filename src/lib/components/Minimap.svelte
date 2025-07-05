@@ -146,6 +146,7 @@
 		right: 16px;
 		bottom: 16px;
 		background: rgba(0, 0, 0, 0.6);
+		backdrop-filter: blur(16px) saturate(1.2);
 		border: 1px solid rgba(255, 255, 255, 0.2);
 		border-radius: 6px;
 		overflow: hidden;

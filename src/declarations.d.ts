@@ -18,5 +18,12 @@ declare module '@lucide/svelte' {
 	export const ZoomIn: typeof SvelteComponentTyped<any>;
 	export const Target: typeof SvelteComponentTyped<any>;
 	export const Shuffle: typeof SvelteComponentTyped<any>;
-	export default any;
+	// Fallback export for the module root
+	const Lucide: typeof SvelteComponentTyped<any>;
+	export default Lucide;
+}
+
+declare module '*.json?raw' {
+	const content: string;
+	export default content;
 }

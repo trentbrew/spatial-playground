@@ -122,9 +122,9 @@
 
 	const nodeIcon = nodeTypeIcons[box.type] || nodeTypeIcons.default;
 
-	// 3D transform for z layer
+	// 3D transform for z layer (no tilt to keep nodes axis-aligned)
 	const depthFactor = 60; // px per z layer
-	const zTransform = `perspective(800px) translateZ(${box.z * depthFactor}px) rotateX(${box.z * -2}deg) rotateY(${box.z * 1.5}deg)`;
+	const zTransform = `perspective(800px) translateZ(${box.z * depthFactor}px)`;
 
 	// Add local state for flipping and pinning
 	let showSettingsBack = $state(false);

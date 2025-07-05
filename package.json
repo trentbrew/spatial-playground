@@ -50,6 +50,7 @@
 		"quilljs-markdown": "^1.2.0",
 		"svelte-ace": "^1.0.21",
 		"uuid": "^11.1.0",
+		"pako": "^2.1.0",
 		"zero-svelte": "^0.3.6",
 		"zero-svelte-query": "^0.9.0"
 	}

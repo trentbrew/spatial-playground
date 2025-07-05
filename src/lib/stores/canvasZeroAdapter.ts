@@ -2,6 +2,9 @@ import { zero, queries, mutators } from './zeroStore';
 import type { AppBoxState } from '$lib/canvasState';
 import { writable, get } from 'svelte/store';
 
+// Raw JSON string containing the default demo scene
+import demoBoxesRaw from '$lib/demo/defaultBoxes.json?raw';
+
 // Helper to convert Zero box format to your AppBoxState format
 function convertZeroBoxToAppBox(zeroBox: any): AppBoxState {
 	return {
@@ -260,6 +263,39 @@ export class CanvasZeroAdapter {
 			await mutators.initializeCanvasState();
 		} catch (error) {
 			console.log('Canvas state already exists or error:', error);
+		}
+
+		// Seed demo boxes if none exist yet
+		try {
+			const existing = await queries.allBoxes();
+			const hasExisting = Array.isArray(existing) && existing.length > 0;
+			if (!hasExisting) {
+				console.log('🌱 Seeding canvas with default demo boxes');
+				const seedBoxes: any[] = JSON.parse(demoBoxesRaw);
+
+				for (const box of seedBoxes) {
+					// Merge tags into content as expected by Zero schema
+					const tags = box.tags ?? [];
+					const content =
+						typeof box.content === 'object' && box.content !== null
+							? { ...box.content, tags }
+							: { body: box.content, tags };
+
+					await mutators.addBox({
+						id: (box.id ?? Date.now() + Math.random()).toString(),
+						x: box.x ?? 0,
+						y: box.y ?? 0,
+						width: box.width ?? 200,
+						height: box.height ?? 200,
+						z_index: box.z ?? box.z_index ?? 0,
+						type: box.type ?? 'sticky',
+						content
+					});
+				}
+				console.log('✅ Demo scene seeded');
+			}
+		} catch (seedError) {
+			console.error('❌ Failed to seed demo boxes:', seedError);
 		}
 	}
 
