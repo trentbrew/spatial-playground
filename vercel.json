@@ -1,0 +1,15 @@
+{
+	"functions": {
+		"src/routes/**/*.js": {
+			"memory": 1024
+		}
+	},
+	"build": {
+		"env": {
+			"NODE_OPTIONS": "--max-old-space-size=8192",
+			"DISABLE_TURTLE_DB": "true"
+		}
+	},
+	"framework": "sveltekit",
+	"buildCommand": "npm run build:vercel"
+}

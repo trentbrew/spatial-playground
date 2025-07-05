@@ -7,14 +7,6 @@ import {
 import { getIntrinsicScaleFactor, getFocusZoomForZ, getParallaxFactor } from '$lib/utils/depth';
 import { detectObstruction } from '$lib/utils/obstruction';
 import { writable } from 'svelte/store';
-import {
-	turtleDbStore,
-	addNode as dbAddNode,
-	updateNode as dbUpdateNode,
-	deleteNode as dbDeleteNode,
-	loadNodes as dbLoadNodes
-} from '$lib/stores/turtleDbStore';
-// Zero sync integration
 import { canvasZeroAdapter } from '$lib/stores/canvasZeroAdapter';
 import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
 import { get } from 'svelte/store';
@@ -589,20 +581,7 @@ let draggingBoxId = $state<number | null>(null);
 let ghostedBoxIds = $state<Set<number>>(new Set());
 let boundaryHitBoxId = $state<number | null>(null); // Track which box hit the Z-boundary
 
-// --- On module load, maintain TurtleDB as backup ---
-dbLoadNodes().then(() => {
-	turtleDbStore.subscribe((dbBoxes) => {
-		// Only use TurtleDB if Zero hasn't loaded any boxes yet
-		if (boxes.length === 0 && dbBoxes.length > 0) {
-			boxes = dbBoxes.map((node) => ({
-				...node,
-				id: parseInt(node.id) // Convert string ID back to number for app compatibility
-			}));
-		}
-	});
-});
-
-// --- Update addBox, updateBox, deleteBox to use Zero with TurtleDB fallback ---
+// --- Update addBox, updateBox, deleteBox to use Zero only ---
 async function addBoxInternal(box: AppBoxState) {
 	try {
 		// Add to Zero first
@@ -618,10 +597,7 @@ async function addBoxInternal(box: AppBoxState) {
 			color: box.color
 		} as any);
 	} catch (error) {
-		console.warn('Failed to add box to Zero, using TurtleDB fallback:', error);
-		// Convert numeric ID to string for TurtleDB compatibility
-		const boxWithStringId = { ...box, id: box.id.toString() };
-		dbAddNode(box.type, boxWithStringId).then(() => dbLoadNodes());
+		console.error('Failed to add box to Zero:', error);
 	}
 }
 
@@ -630,8 +606,7 @@ async function updateBoxInternal(id: number, partial: Partial<AppBoxState>) {
 		// Update in Zero first
 		await canvasZeroAdapter.updateBox(id, partial);
 	} catch (error) {
-		console.warn('Failed to update box in Zero, using TurtleDB fallback:', error);
-		dbUpdateNode(id.toString(), partial).then(() => dbLoadNodes());
+		console.error('Failed to update box in Zero:', error);
 	}
 }
 
@@ -640,8 +615,7 @@ async function deleteBoxInternal(id: number) {
 		// Delete from Zero first
 		await canvasZeroAdapter.deleteBox(id);
 	} catch (error) {
-		console.warn('Failed to delete box from Zero, using TurtleDB fallback:', error);
-		dbDeleteNode(id.toString()).then(() => dbLoadNodes());
+		console.error('Failed to delete box from Zero:', error);
 	}
 }
 
@@ -695,9 +669,6 @@ async function loadState() {
 if (typeof window !== 'undefined') {
 	loadState();
 }
-
-// --- Listen for TurtleDB node events and refresh boxes ---
-// (Already handled by turtleDbStore subscription above)
 
 // Store functions
 export const canvasStore = {

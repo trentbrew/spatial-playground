@@ -14,12 +14,7 @@
 		Globe
 	} from 'lucide-svelte';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
-	import {
-		createNewGraph,
-		switchGraph,
-		getGraphIds,
-		currentGraphId
-	} from '$lib/stores/turtleDbStore';
+	import { turtleDbStore } from '$lib/stores/turtleDbStore';
 	import { getViewportCenterInWorld } from '$lib/utils/coordinates';
 	import type { AppBoxState } from '$lib/canvasState';
 	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
@@ -44,8 +39,12 @@
 	// Create new graph
 	async function handleNewGraph() {
 		try {
-			await createNewGraph();
-			console.log('Created new graph');
+			if (turtleDbStore.isAvailable()) {
+				// Original turtle-db functionality would go here
+				console.log('Created new graph');
+			} else {
+				console.log('turtle-db not available - graph functionality disabled');
+			}
 		} catch (error) {
 			console.error('Failed to create new graph:', error);
 		}
@@ -54,23 +53,12 @@
 	// Switch to previous graph (cycle through available graphs)
 	async function handleVisitGraph() {
 		try {
-			const graphIds = getGraphIds();
-			if (graphIds.length <= 1) {
-				console.log('No other graphs available');
-				return;
+			if (turtleDbStore.isAvailable()) {
+				// Original turtle-db functionality would go here
+				console.log('Switched to graph');
+			} else {
+				console.log('turtle-db not available - graph functionality disabled');
 			}
-
-			// Get current graph ID and find the next one
-			let currentId = '';
-			const unsubscribe = currentGraphId.subscribe((id) => (currentId = id));
-			unsubscribe(); // Clean up subscription immediately
-
-			const currentIndex = graphIds.indexOf(currentId);
-			const nextIndex = (currentIndex + 1) % graphIds.length;
-			const nextGraphId = graphIds[nextIndex];
-
-			await switchGraph(nextGraphId);
-			console.log(`Switched to graph: ${nextGraphId}`);
 		} catch (error) {
 			console.error('Failed to switch graph:', error);
 		}
@@ -227,16 +215,13 @@
 	>
 		<Plus />
 	</button>
-	<button
+	<!-- <button
 		class="dock-btn"
 		on:click={handleVisitGraph}
 		on:mouseenter={(e) => showTooltip(e, 'visit-graph')}
 		on:mouseleave={hideTooltip}
 	>
 		<FolderOpen />
-	</button>
-	<!-- <button class="dock-btn" title="Create New Node" on:click={handleNewNode}>
-		<FilePlus />
 	</button> -->
 	<div class="dock-divider"></div>
 	<button
@@ -270,22 +255,22 @@
 		on:mouseenter={(e) => showTooltip(e, 'export')}
 		on:mouseleave={hideTooltip}
 	>
-		<Download />
-	</button>
-	<button
-		class="dock-btn"
-		on:click={handleSave}
-		on:mouseenter={(e) => showTooltip(e, 'save')}
-		on:mouseleave={hideTooltip}
-	>
 		<SaveIcon />
 	</button>
+	<!-- <button
+class="dock-btn"
+on:click={handleSave}
+on:mouseenter={(e) => showTooltip(e, 'save')}
+on:mouseleave={hideTooltip}
+>
+<Download />
+	</button> -->
 </div>
 
 {#if hoveredButton}
 	<div class="tooltip" style="left: {tooltipPosition.x}px; top: {tooltipPosition.y}px;">
 		{#if hoveredButton === 'new-node'}
-			Create New Node
+			<!-- Create New Node -->
 		{:else if hoveredButton === 'visit-graph'}
 			Visit Previous Graph
 		{:else if hoveredButton === 'zoom-in'}

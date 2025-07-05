@@ -5,7 +5,9 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "NODE_OPTIONS='--max-old-space-size=4096' DISABLE_TURTLE_DB=true vite build",
+		"build:vercel": "NODE_OPTIONS='--max-old-space-size=8192' DISABLE_TURTLE_DB=true vite build",
+		"build:dev": "vite build",
 		"preview": "vite preview",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -50,7 +52,6 @@
 		"quilljs-markdown": "^1.2.0",
 		"svelte-ace": "^1.0.21",
 		"uuid": "^11.1.0",
-		"pako": "^2.1.0",
 		"zero-svelte": "^0.3.6",
 		"zero-svelte-query": "^0.9.0"
 	}
