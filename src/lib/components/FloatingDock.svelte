@@ -98,7 +98,15 @@
 		try {
 			const currentZoom = canvasStore.zoom;
 			const newZoom = Math.min(currentZoom * 1.25, 5); // Max zoom 5x
-			canvasStore.setZoom(newZoom, { autoUnfocus: true });
+			// Use smooth zoom animation
+			canvasStore.setTargetViewportAnimated(
+				{
+					zoom: newZoom,
+					x: canvasStore.offsetX,
+					y: canvasStore.offsetY
+				},
+				300
+			);
 			console.log(`Zoomed in to ${newZoom.toFixed(2)}x`);
 		} catch (error) {
 			console.error('Failed to zoom in:', error);
@@ -110,7 +118,15 @@
 		try {
 			const currentZoom = canvasStore.zoom;
 			const newZoom = Math.max(currentZoom * 0.8, 0.1); // Min zoom 0.1x
-			canvasStore.setZoom(newZoom, { autoUnfocus: true });
+			// Use smooth zoom animation
+			canvasStore.setTargetViewportAnimated(
+				{
+					zoom: newZoom,
+					x: canvasStore.offsetX,
+					y: canvasStore.offsetY
+				},
+				300
+			);
 			console.log(`Zoomed out to ${newZoom.toFixed(2)}x`);
 		} catch (error) {
 			console.error('Failed to zoom out:', error);
@@ -120,7 +136,8 @@
 	// Reset zoom and center viewport
 	function handleZoomReset() {
 		try {
-			canvasStore.setTargetViewport({ zoom: 1, x: 0, y: 0 });
+			// Use smooth animation for reset
+			canvasStore.setTargetViewportAnimated({ zoom: 1, x: 0, y: 0 }, 600);
 			console.log('Reset zoom and centered viewport');
 		} catch (error) {
 			console.error('Failed to reset zoom:', error);
