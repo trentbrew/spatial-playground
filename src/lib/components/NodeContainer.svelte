@@ -51,7 +51,12 @@
 	};
 
 	// Use $props() rune for component props
-	let { box }: { box: AppBoxState } = $props();
+	let { box: initialBox }: { box: AppBoxState } = $props();
+
+	// --- REACTIVE BOX STATE ---
+	// Find the reactive, up-to-date version of the box from the store.
+	// This ensures that any external changes (like content updates) are reflected here.
+	const box = $derived(canvasStore.boxes.find((b) => b.id === initialBox.id) || initialBox);
 
 	// Get viewport context
 	let viewportWidth = 0;
@@ -96,7 +101,7 @@
 	// Precompute expected focus zoom for this node's depth
 	const focusZoom = $derived(getFocusZoomForZ(box.z));
 
-	const Component = nodeComponentMap[box.type] || nodeComponentMap['sticky'];
+	const Component = $derived(nodeComponentMap[box.type] || nodeComponentMap['sticky']);
 
 	// Component references for actions
 	let containerElement: HTMLDivElement;
@@ -120,7 +125,7 @@
 		nodeTitle = source.split?.('\n')[0]?.slice(0, 32) || 'Untitled';
 	});
 
-	const nodeIcon = nodeTypeIcons[box.type] || nodeTypeIcons.default;
+	const nodeIcon = $derived(nodeTypeIcons[box.type] || nodeTypeIcons.default);
 
 	// 3D transform for z layer (no tilt to keep nodes axis-aligned)
 	const depthFactor = 60; // px per z layer
@@ -134,14 +139,13 @@
 	function addTag(tag: string) {
 		console.log('NodeContainer addTag', tag);
 		canvasStore.addTag(box.id, tag);
-		// Optimistically update local box reference to keep tag visible
-		box = { ...box, tags: [...(box.tags || []), tag] };
+		// No need for optimistic update, derived box will update automatically
 	}
 
 	function removeTag(tag: string) {
 		console.log('NodeContainer removeTag', tag);
 		canvasStore.removeTag(box.id, tag);
-		box = { ...box, tags: (box.tags || []).filter((t) => t !== tag) };
+		// No need for optimistic update, derived box will update automatically
 	}
 
 	function handleClick(event: MouseEvent) {

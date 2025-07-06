@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
-	import { Lock } from 'lucide-svelte';
+	import { ArrowRight, Lock } from 'lucide-svelte';
 	// Note: Icons not needed since we're using emoji
 
 	// Use $props() rune for component props
@@ -27,10 +27,10 @@
 
 	// Extract URL string regardless of whether content is string or object
 	const contentStr =
-		typeof content === 'string'
-			? content
-			: content && typeof content === 'object'
-				? (content.url ?? content.body ?? content.text ?? '')
+		content && typeof content === 'object'
+			? (content.url ?? content.body ?? content.text ?? '')
+			: typeof content === 'string'
+				? content
 				: '';
 
 	// Check if we have a valid URL to display
@@ -46,15 +46,17 @@
 
 	function handleUrlSubmit() {
 		const trimmedUrl = urlInput.trim();
+		console.log('[EmbedNode] handleUrlSubmit called, urlInput:', urlInput, 'trimmed:', trimmedUrl); // DEBUG
 		if (trimmedUrl) {
-			// Ensure URL has protocol
 			const finalUrl = trimmedUrl.startsWith('http') ? trimmedUrl : `https://${trimmedUrl}`;
-			canvasStore.updateBox(id, { content: finalUrl });
+			console.log('[EmbedNode] Submitting URL:', finalUrl); // DEBUG
+			canvasStore.updateBox(id, { content: { url: finalUrl } });
 			isEditingUrl = false;
 		}
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
+		console.log('[EmbedNode] handleKeyDown:', event.key); // DEBUG
 		if (event.key === 'Enter') {
 			event.preventDefault();
 			handleUrlSubmit();
@@ -83,6 +85,15 @@
 			return url;
 		}
 	}
+
+	$effect(() => {
+		if ((isInitialState || isEditingUrl) && inputElement) {
+			setTimeout(() => {
+				inputElement?.focus();
+				inputElement?.select();
+			}, 0);
+		}
+	});
 </script>
 
 <div id={String(id)} class="embed-node" style="background-color: black;">
@@ -107,9 +118,14 @@
 					spellcheck="false"
 					data-cursor="ignore"
 				/>
-				<!-- <button onclick={handleUrlSubmit} class="submit-btn" disabled={!urlInput.trim()}>
-					→
-				</button> -->
+				<button
+					onclick={handleUrlSubmit}
+					class="submit-btn"
+					disabled={!urlInput.trim()}
+					aria-label="Embed URL"
+				>
+					<ArrowRight class="h-4 w-4" />
+				</button>
 			</div>
 			<!-- <div class="hint">Press Enter to load</div> -->
 		</div>
@@ -146,16 +162,18 @@
 			</div>
 
 			<!-- Embedded content -->
-			<div class="iframe-container">
-				<iframe
-					src={contentStr}
-					title="Embed {id}"
-					allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-					allowfullscreen
-					data-cursor={isFocused ? 'ignore' : undefined}
-					style="pointer-events: {isFocused ? 'auto' : 'none'};"
-				></iframe>
-			</div>
+			{#key contentStr}
+				<div class="iframe-container">
+					<iframe
+						src={contentStr}
+						title="Embed {id}"
+						allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+						allowfullscreen
+						data-cursor={isFocused ? 'ignore' : undefined}
+						style="pointer-events: {isFocused ? 'auto' : 'none'};"
+					></iframe>
+				</div>
+			{/key}
 		</div>
 	{:else}
 		<!-- Invalid URL state -->
@@ -387,5 +405,25 @@
 	.retry-btn {
 		padding: 8px 16px;
 		font-size: 12px;
+	}
+
+	.submit-btn {
+		margin-left: 8px;
+		padding: 6px 18px;
+		background: #222;
+		color: #fff;
+		border: none;
+		border-radius: 4px;
+		font-size: 1rem;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+	.submit-btn:disabled {
+		background: #444;
+		color: #aaa;
+		cursor: not-allowed;
+	}
+	.submit-btn:not(:disabled):hover {
+		background: #444;
 	}
 </style>

@@ -415,7 +415,6 @@ async function generateRandomBoxes(): Promise<AppBoxState[]> {
 		'haus.png',
 		'her Medium Small.png',
 		'her.jpg',
-		'her2.png',
 		'hug.jpg',
 		'IMG_0191.jpg',
 		'IMG_0292.PNG',
@@ -583,6 +582,10 @@ let boundaryHitBoxId = $state<number | null>(null); // Track which box hit the Z
 
 // --- Update addBox, updateBox, deleteBox to use Zero only ---
 async function addBoxInternal(box: AppBoxState) {
+	if (box.content && Array.isArray(box.content)) {
+		console.error('Refusing to store array as content in addBoxInternal!', box.content);
+		return;
+	}
 	try {
 		// Add to Zero first
 		await canvasZeroAdapter.addNode({
@@ -602,6 +605,10 @@ async function addBoxInternal(box: AppBoxState) {
 }
 
 async function updateBoxInternal(id: number, partial: Partial<AppBoxState>) {
+	if (partial.content && Array.isArray(partial.content)) {
+		console.error('Refusing to store array as content in updateBoxInternal!', partial.content);
+		return;
+	}
 	try {
 		// Update in Zero first
 		await canvasZeroAdapter.updateBox(id, partial);
@@ -826,7 +833,7 @@ export const canvasStore = {
 			if (updatedBox.height !== undefined) {
 				updatedBox.height = Math.max(200, updatedBox.height);
 			}
-			boxes[boxIndex] = updatedBox;
+			boxes = boxes.map((b) => (b.id === id ? updatedBox : b));
 			await updateBoxInternal(id, partial);
 			debouncedSave();
 		}
