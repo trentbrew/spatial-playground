@@ -1,0 +1,1 @@
+I think I'm ready to begin implementing multiple spaces, allowing the user to create a new blank canvas and manage existing ones. These should live in a dropdown in the upper left corner (see attached reference)
