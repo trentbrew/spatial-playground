@@ -1,6 +1,6 @@
 {
-	"buildCommand": "pnpm install && pnpm run build:vercel",
-	"installCommand": "pnpm install",
+	"buildCommand": "npm install && npm run build:vercel",
+	"installCommand": "npm install",
 	"framework": "sveltekit",
 	"version": 2,
 	"builds": [
