@@ -3,12 +3,6 @@
 	"installCommand": "npm install",
 	"framework": "sveltekit",
 	"version": 2,
-	"builds": [
-		{
-			"src": "package.json",
-			"use": "@vercel/node@3.0.0"
-		}
-	],
 	"routes": [{ "src": "/(.*)", "dest": "/" }],
 	"env": {
 		"DISABLE_TURTLE_DB": "true",
