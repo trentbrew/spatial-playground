@@ -62,7 +62,7 @@
 		"zero-svelte-query": "^0.9.0"
 	},
 	"engines": {
-		"node": "18.x",
+		"node": "20.x",
 		"npm": ">=10.8.2",
 		"pnpm": ">=10.7.1"
 	}
