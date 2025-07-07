@@ -981,7 +981,59 @@ export const canvasStore = {
 		const boxCenterY = y + height / 2;
 
 		// 2. Get the target zoom for the box's z-plane to be in focus
-		const newTargetZoom = getFocusZoomForZ(z);
+		// Use progressively higher zoom levels for deeper negative z-indices
+		let newTargetZoom;
+		if (z >= 0) {
+			// For foreground nodes, use the regular calculation
+			newTargetZoom = getFocusZoomForZ(z);
+		} else {
+			// For background nodes, use a more nuanced approach based on specific z-index
+			switch (z) {
+				case -1:
+					newTargetZoom = 4.5; // Moderate zoom for z=-1
+					break;
+				case -2:
+					newTargetZoom = 6.0; // Higher zoom for z=-2
+					break;
+				case -3:
+					newTargetZoom = 7.5; // Even higher zoom for z=-3
+					break;
+				default:
+					// For extremely deep nodes (z < -3)
+					newTargetZoom = 8.0 + (Math.abs(z) - 3) * 0.5; // Add 0.5 for each level below -3
+			}
+		}
+
+		console.log(`🔍 Using z-index ${z}, target zoom: ${newTargetZoom}`);
+
+		// NEW: Calculate dynamic padding based on z-index
+		// Higher z-index (closer to camera) gets more padding
+		// Base padding of 10% (0.9 fill factor), increases with z
+		// z=0 → 10% padding (0.9), z=1 → 15% padding (0.85), z=2 → 20% padding (0.8), etc.
+		const basePadding = 0.1; // 10% minimum padding
+		const zPaddingFactor = Math.max(0, z) * 0.05; // 5% additional padding per z level
+		const totalPaddingFactor = Math.min(0.3, basePadding + zPaddingFactor); // Cap at 30% padding
+		const viewportFillFactor = 1 - totalPaddingFactor;
+
+		console.log(
+			`📏 Dynamic padding for z=${z}: ${(totalPaddingFactor * 100).toFixed(1)}%, fill factor: ${(viewportFillFactor * 100).toFixed(1)}%`
+		);
+
+		// Calculate scale factors based on box dimensions relative to viewport with dynamic padding
+		const widthScaleFactor = (viewportWidth * viewportFillFactor) / width;
+		const heightScaleFactor = (viewportHeight * viewportFillFactor) / height;
+
+		// Use the minimum scale factor to ensure the box fits in both dimensions
+		const sizeAdjustedZoom = Math.min(widthScaleFactor, heightScaleFactor);
+
+		// OVERRIDE: For negative z (far-back nodes), don't reduce the zoom based on box size
+		// This ensures the forced zoom level is maintained
+		if (sizeAdjustedZoom < newTargetZoom && z >= 0) {
+			console.log(
+				`📏 Adjusting zoom for large box: original=${newTargetZoom.toFixed(2)}, size-adjusted=${sizeAdjustedZoom.toFixed(2)}`
+			);
+			newTargetZoom = sizeAdjustedZoom;
+		}
 
 		// 3. Account for parallax and intrinsic scaling effects
 		// Use the same depth utilities that are used in rendering

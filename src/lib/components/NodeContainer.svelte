@@ -454,9 +454,10 @@
 				></div>
 			{/if}
 
-			{#if selectedBoxId === box.id && fullscreenBoxId !== box.id}
+			{#if !fullscreenBoxId}
 				<div
 					class="resize-handle handle-se"
+					class:active={selectedBoxId === box.id}
 					role="button"
 					tabindex="0"
 					data-handle-type="se"
@@ -623,14 +624,19 @@
 		height: 36px;
 		border-radius: 6px;
 		z-index: 15;
-		opacity: 0.7;
+		opacity: 0.3; /* Default lower opacity for unselected nodes */
 		pointer-events: auto;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		transition: all 0.2s ease;
-		transform: scale(1.3);
+		transform: scale(1); /* Smaller scale for unselected nodes */
 		padding: 4px;
+	}
+
+	.resize-handle.handle-se.active {
+		opacity: 0.7; /* Higher opacity for selected nodes */
+		transform: scale(1.3); /* Larger scale for selected nodes */
 	}
 
 	.resize-handle.handle-se:hover {

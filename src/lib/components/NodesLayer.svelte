@@ -100,8 +100,16 @@
 		const maxBlur = isFocused ? 16 : 8; // Higher blur when focused for dramatic effect
 
 		let blurAmount = 0;
+
+		// Check if this is the specific z-level that's being focused
+		const isFocusedLayer = isFocused && boxes.find((b) => b.id === zoomedBoxId)?.z === z;
+
+		// If this is the exact layer being focused, make it completely sharp
+		if (isFocusedLayer) {
+			blurAmount = 0; // No blur for the focused layer
+		}
 		// Apply DOF blur only to foreground (positive z) layers or when a node is actively focused.
-		if (z > 0 || isFocused) {
+		else if (z > 0 || isFocused) {
 			blurAmount = Math.min(maxBlur, focusDelta * dofSharpnessFactor);
 		}
 
@@ -110,7 +118,7 @@
 		 * To keep background nodes readable we now apply that extra zoom-dependent blur
 		 * only to foreground / positive-z layers.
 		 */
-		if (z > 0) {
+		if (z > 0 && !isFocusedLayer) {
 			const zoomFactor = 1 / Math.max(0.1, $zoom); // decreases as you zoom in
 			const depthFactor = z; // higher z ⇒ closer ⇒ more blur
 			const zoomBlur = depthFactor * DEPTH_BLUR_MULTIPLIER * zoomFactor;
@@ -125,7 +133,8 @@
 			}
 		}
 
-		const brightness = Math.max(0.5, 1.0 - focusDelta * 0.6);
+		// Calculate brightness, but make sure focused layer is at 100% brightness
+		const brightness = isFocusedLayer ? 1.0 : Math.max(0.5, 1.0 - focusDelta * 0.6);
 
 		// If aperture effect is disabled and we're not in focus mode, disable blur.
 		if (!apertureEnabled && !isFocused) {
@@ -140,12 +149,12 @@
 		// Opacity is now also a function of the focus delta, but only for foreground items.
 		// Layers fade out as they become more out-of-focus.
 		let opacity = 1.0;
-		if (z > 0) {
+		if (z > 0 && !isFocusedLayer) {
 			opacity = Math.max(0, 1.0 - focusDelta * 0.8);
 		}
 
 		// Additional zoom-dependent opacity reduction for very far back nodes to enhance depth perception
-		if (z <= DEPTH_BLUR_THRESHOLD) {
+		if (z <= DEPTH_BLUR_THRESHOLD && !isFocusedLayer) {
 			const zoomFactor = 1 / Math.max(0.1, $zoom); // Inverse of zoom
 			const depthFactor = Math.abs(z) - Math.abs(DEPTH_BLUR_THRESHOLD); // How many levels below threshold
 			const zoomDependentOpacityReduction =

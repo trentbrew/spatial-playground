@@ -18,7 +18,18 @@ export const getFocusZoomForZ = (z: number): number => {
 	// 0.6 was chosen for a more dramatic effect.
 	// For Z=0 (foreground), we add a minimum zoom to make interaction feel responsive
 	const baseZoom = Math.pow(0.6, z);
-	return Math.max(1.5, baseZoom); // Minimum 1.5x zoom for better UX
+
+	// For far-back nodes (negative z), increase minimum zoom to ensure clarity
+	// The further back the node, the higher the minimum zoom
+	let minZoom = 1.5; // Default minimum zoom
+
+	if (z < 0) {
+		// Very aggressively increase minimum zoom for back layers
+		// For example: z=-1 → 4.5, z=-2 → 6.0, z=-3 → 7.5
+		minZoom = 4.5 + Math.abs(z) * 1.5;
+	}
+
+	return Math.max(minZoom, baseZoom); // Use higher minimum zoom for better clarity
 };
 
 /**

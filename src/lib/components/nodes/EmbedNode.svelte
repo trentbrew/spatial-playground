@@ -24,14 +24,27 @@
 	let urlInput = $state('');
 	let isEditingUrl = $state(false);
 	let inputElement = $state<HTMLInputElement>();
+	let lastSubmittedUrl = $state(''); // Track last submitted URL for forcing updates
 
 	// Extract URL string regardless of whether content is string or object
-	const contentStr =
-		content && typeof content === 'object'
-			? (content.url ?? content.body ?? content.text ?? '')
-			: typeof content === 'string'
-				? content
-				: '';
+	$effect(() => {
+		// Re-compute contentStr whenever content changes
+		updateContentStr();
+	});
+
+	function updateContentStr() {
+		const newContentStr =
+			content && typeof content === 'object'
+				? (content.url ?? content.body ?? content.text ?? '')
+				: typeof content === 'string'
+					? content
+					: '';
+
+		// Update the derived values
+		contentStr = newContentStr;
+	}
+
+	let contentStr = $state('');
 
 	// Check if we have a valid URL to display
 	const hasValidUrl = $derived(contentStr && contentStr.match(/^https?:\/\/.+/));
@@ -50,7 +63,16 @@
 		if (trimmedUrl) {
 			const finalUrl = trimmedUrl.startsWith('http') ? trimmedUrl : `https://${trimmedUrl}`;
 			console.log('[EmbedNode] Submitting URL:', finalUrl); // DEBUG
+
+			// Save last submitted URL for comparison
+			lastSubmittedUrl = finalUrl;
+
+			// Update the store
 			canvasStore.updateBox(id, { content: { url: finalUrl } });
+
+			// Force immediate update of contentStr without waiting for props to update
+			contentStr = finalUrl;
+
 			isEditingUrl = false;
 		}
 	}
@@ -162,7 +184,7 @@
 			</div>
 
 			<!-- Embedded content -->
-			{#key contentStr}
+			{#key contentStr + lastSubmittedUrl}
 				<div class="iframe-container">
 					<iframe
 						src={contentStr}
