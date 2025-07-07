@@ -12,6 +12,6 @@
 	"routes": [{ "src": "/(.*)", "dest": "/" }],
 	"env": {
 		"DISABLE_TURTLE_DB": "true",
-		"NODE_VERSION": "20.19.2"
+		"NODE_VERSION": "18.x"
 	}
 }
