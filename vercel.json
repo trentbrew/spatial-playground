@@ -1,8 +1,16 @@
 {
-	"build": {
-		"env": {
-			"NODE_OPTIONS": "--max-old-space-size=8192",
-			"DISABLE_TURTLE_DB": "true"
+	"buildCommand": "pnpm install && pnpm run build:vercel",
+	"installCommand": "pnpm install",
+	"framework": "sveltekit",
+	"version": 2,
+	"builds": [
+		{
+			"src": "package.json",
+			"use": "@vercel/node@20"
 		}
+	],
+	"routes": [{ "src": "/(.*)", "dest": "/" }],
+	"env": {
+		"DISABLE_TURTLE_DB": "true"
 	}
 }
