@@ -20,18 +20,17 @@
 		MAX_NODE_WIDTH,
 		MAX_NODE_HEIGHT
 	} from '$lib/constants';
-	// Lucide icons - ignore TS type errors via global declaration
-	// @ts-ignore
-	import {
-		StickyNote,
-		Code,
-		Image as ImageIcon,
-		Globe,
-		Clipboard,
-		ZoomIn,
-		Target,
-		Shuffle
-	} from '@lucide/svelte';
+	// Lucide icons
+	import StickyNote from 'lucide-svelte/icons/sticky-note';
+	import Code from 'lucide-svelte/icons/code';
+	import ImageIcon from 'lucide-svelte/icons/image';
+	import Globe from 'lucide-svelte/icons/globe';
+	import Clipboard from 'lucide-svelte/icons/clipboard';
+	import ZoomIn from 'lucide-svelte/icons/zoom-in';
+	import Target from 'lucide-svelte/icons/target';
+	import Shuffle from 'lucide-svelte/icons/shuffle';
+	import FileText from 'lucide-svelte/icons/file-text';
+	import Music from 'lucide-svelte/icons/music';
 	import { zoom, offsetX, offsetY } from '$lib/stores/viewportStore';
 	import Minimap from '$lib/components/Minimap.svelte';
 
@@ -208,6 +207,16 @@
 				label: 'Add Embed',
 				icon: Globe
 			},
+			{
+				id: 'add-pdf',
+				label: 'Add PDF',
+				icon: FileText
+			},
+			{
+				id: 'add-audio',
+				label: 'Add Audio',
+				icon: Music
+			},
 			{ id: 'sep1', label: '', separator: true },
 			{
 				id: 'paste',
@@ -295,6 +304,12 @@
 				case 'add-embed':
 					createNewNode('embed', worldX, worldY);
 					break;
+				case 'add-pdf':
+					createNewNode('pdf', worldX, worldY);
+					break;
+				case 'add-audio':
+					createNewNode('audio', worldX, worldY);
+					break;
 				case 'zoom-fit':
 					zoomToFitAll();
 					break;
@@ -345,6 +360,10 @@
 				return 'Image placeholder';
 			case 'embed':
 				return ''; // Start with empty content to show input prompt
+			case 'pdf':
+				return ''; // Initialize with empty string for PDF URL
+			case 'audio':
+				return ''; // Initialize with empty string for Audio URL
 			default:
 				return 'New content';
 		}

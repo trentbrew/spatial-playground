@@ -128,8 +128,13 @@
 	const nodeIcon = $derived(nodeTypeIcons[box.type] || nodeTypeIcons.default);
 
 	// 3D transform for z layer (no tilt to keep nodes axis-aligned)
-	const depthFactor = 60; // px per z layer
-	const zTransform = `perspective(800px) translateZ(${box.z * depthFactor}px)`;
+	// Reduced depth factor for more subtle 3D effect
+	const depthFactor = 30; // px per z layer (reduced from 60)
+	const zTransform = $derived(`translateZ(${box.z * depthFactor}px)`);
+
+	// Calculate z-brightness using tanh for more even distribution
+	// tanh compresses the range, making differences between layers more consistent
+	const zBrightness = $derived(Math.tanh(box.z * 0.3) * 0.15);
 
 	// Add local state for flipping and pinning
 	let showSettingsBack = $state(false);
@@ -375,7 +380,7 @@
 	class:pinned={isPinned}
 	style:width="{box.width}px"
 	style:height="{box.height}px"
-	style:--z-brightness={box.z * 0.05}
+	style:--z-brightness={zBrightness}
 	style:--focus-transition-duration="{FOCUS_TRANSITION_DURATION}ms"
 	style:z-index={fullscreenBoxId === box.id
 		? 10
@@ -391,7 +396,7 @@
 			: !isClickable && selectedBoxId !== box.id
 				? 'none'
 				: 'auto'}
-	style:transform="{zTransform} scale(calc(1 + var(--z-brightness, 0) * 0.5))"
+	style:transform="perspective(1000px) {zTransform} scale(calc(1 + var(--z-brightness, 0) * 0.3))"
 	style:position={isPinned ? 'fixed' : 'absolute'}
 	style:left={isPinned ? '40px' : `${box.x}px`}
 	style:top={isPinned ? '40px' : `${box.y}px`}
@@ -546,13 +551,13 @@
 			transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 		/* Add subtle visual effects based on Z-index for depth perception */
 		filter: brightness(calc(1 + var(--z-brightness, 0)));
-		/* Subtle scale effect based on Z-depth for enhanced depth perception */
-		transform: scale(calc(1 + var(--z-brightness, 0) * 0.5));
+		/* Remove duplicate scale transform since it's now in the inline style */
 		/* Dynamic depth shadow that grows with Z-index (background = larger shadow) */
+		/* Made more subtle by reducing the multipliers */
 		box-shadow:
 			0 0 0 1px var(--box-border-color),
-			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
-				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.05));
+			0 calc(2px + var(--z-brightness, 0) * -6px) calc(8px + var(--z-brightness, 0) * -12px)
+				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.03));
 		min-width: 360px;
 		min-height: 270px;
 		perspective: 1200px;
@@ -655,8 +660,8 @@
 		/* Enhanced selected state that preserves depth shadow */
 		box-shadow:
 			0 0 0 2px var(--box-bg-color-selected-shadow),
-			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
-				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.05));
+			0 calc(2px + var(--z-brightness, 0) * -6px) calc(8px + var(--z-brightness, 0) * -12px)
+				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.03));
 	}
 	.box.fullscreen {
 		border-radius: 8px 8px 0 0;
@@ -666,8 +671,8 @@
 		/* Enhanced focus state that preserves depth shadow */
 		box-shadow:
 			0 0 0 4px var(--quickfocus-indicator-color),
-			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
-				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.05));
+			0 calc(2px + var(--z-brightness, 0) * -6px) calc(8px + var(--z-brightness, 0) * -12px)
+				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.03));
 	}
 
 	.fullscreen-toggle-button {
@@ -760,8 +765,8 @@
 		border-color: rgba(74, 144, 226, 0.6);
 		box-shadow:
 			0 0 0 2px rgba(74, 144, 226, 0.3),
-			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
-				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.05));
+			0 calc(2px + var(--z-brightness, 0) * -6px) calc(8px + var(--z-brightness, 0) * -12px)
+				rgba(0, 0, 0, calc(0.1 + var(--z-brightness, 0) * -0.03));
 	}
 
 	.box.edit-mode .drag-handle {
@@ -784,8 +789,8 @@
 		box-shadow:
 			0 0 0 4px rgba(255, 68, 68, 0.5),
 			0 0 20px rgba(255, 68, 68, 0.3),
-			0 calc(2px + var(--z-brightness, 0) * -10px) calc(8px + var(--z-brightness, 0) * -20px)
-				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.05)) !important;
+			0 calc(2px + var(--z-brightness, 0) * -6px) calc(8px + var(--z-brightness, 0) * -12px)
+				rgba(0, 0, 0, calc(0.15 + var(--z-brightness, 0) * -0.03)) !important;
 		animation:
 			boundary-flash 0.5s ease-out,
 			boundary-spring 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -812,25 +817,25 @@
 
 	@keyframes boundary-spring {
 		0% {
-			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 1)) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.3) * 1)) translateZ(0);
 		}
 		15% {
-			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 0.95)) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.3) * 0.95)) translateZ(0);
 		}
 		30% {
-			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 1.05)) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.3) * 1.05)) translateZ(0);
 		}
 		45% {
-			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 0.98)) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.3) * 0.98)) translateZ(0);
 		}
 		60% {
-			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 1.02)) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.3) * 1.02)) translateZ(0);
 		}
 		75% {
-			transform: scale(calc((1 + var(--z-brightness, 0) * 0.5) * 0.99)) translateZ(0);
+			transform: scale(calc((1 + var(--z-brightness, 0) * 0.3) * 0.99)) translateZ(0);
 		}
 		100% {
-			transform: scale(calc(1 + var(--z-brightness, 0) * 0.5)) translateZ(0);
+			transform: scale(calc(1 + var(--z-brightness, 0) * 0.3)) translateZ(0);
 		}
 	}
 

@@ -11,7 +11,9 @@
 		StickyNote,
 		Code,
 		Image as ImageIcon,
-		Globe
+		Globe,
+		FileText,
+		Music
 	} from 'lucide-svelte';
 	import { canvasStore } from '$lib/stores/canvasStore.svelte';
 	import { turtleDbStore } from '$lib/stores/turtleDbStore';
@@ -73,7 +75,9 @@
 			{ id: 'add-note', label: 'Add Note', icon: StickyNote },
 			{ id: 'add-code', label: 'Add Code Block', icon: Code },
 			{ id: 'add-image', label: 'Add Image', icon: ImageIcon },
-			{ id: 'add-embed', label: 'Add Embed', icon: Globe }
+			{ id: 'add-embed', label: 'Add Embed', icon: Globe },
+			{ id: 'add-pdf', label: 'Add PDF', icon: FileText },
+			{ id: 'add-audio', label: 'Add Audio', icon: Music }
 		];
 
 		// Screen coords: show menu just above the button

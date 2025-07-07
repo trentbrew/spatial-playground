@@ -13,7 +13,8 @@
 		"test:watch": "vitest",
 		"prepare": "svelte-kit sync || echo ''",
 		"format": "prettier --write .",
-		"lint": "prettier --check ."
+		"lint": "prettier --check .",
+		"embed-artworks": "node scripts/embed-artworks.mjs"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^5.6.3",
@@ -40,18 +41,23 @@
 	},
 	"packageManager": "pnpm@10.7.1+sha512.2d92c86b7928dc8284f53494fb4201f983da65f0fb4f0d40baafa5cf628fa31dae3e5968f12466f17df7e97310e30f343a648baea1b9b350685dafafffdf5808",
 	"dependencies": {
+		"@google/generative-ai": "^0.24.1",
 		"@lucide/svelte": "^0.517.0",
 		"@rocicorp/zero": "^0.20.2025052100",
 		"brace": "^0.11.1",
 		"d3-scale": "^4.0.2",
+		"dotenv": "^17.0.1",
 		"highlight.js": "^11.11.1",
+		"jimp": "^1.6.0",
 		"lucide": "^0.518.0",
 		"lucide-svelte": "^0.518.0",
 		"marked": "^15.0.12",
+		"node-vibrant": "^4.0.3",
 		"quill": "^2.0.3",
 		"quilljs-markdown": "^1.2.0",
 		"svelte-ace": "^1.0.21",
 		"uuid": "^11.1.0",
+		"vercel-ai": "^0.0.0",
 		"zero-svelte": "^0.3.6",
 		"zero-svelte-query": "^0.9.0"
 	}

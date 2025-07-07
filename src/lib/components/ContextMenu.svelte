@@ -77,7 +77,7 @@
 		}
 	}
 
-	onMount(() => {
+	$effect(() => {
 		if (visible) {
 			// Calculate menu dimensions
 			menuWidth = menuElement?.offsetWidth || 0;

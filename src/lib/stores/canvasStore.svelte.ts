@@ -188,25 +188,41 @@ let boxes = $state<AppBoxState[]>([]);
 if (typeof window !== 'undefined') {
 	canvasZeroAdapter.allNodes.subscribe((zeroNodes) => {
 		if (Array.isArray(zeroNodes)) {
+			// Filter out any null or undefined nodes from the raw Zero data
+			const validZeroNodes = zeroNodes.filter(Boolean);
+
 			// Defend against unnecessary reactive churn from polling.
-			// Only replace the boxes array if the data has actually changed.
-			if (!haveBoxesChanged(boxes, zeroNodes)) {
+			if (!haveBoxesChanged(boxes, validZeroNodes)) {
 				return;
 			}
-			console.log('🔄 Zero sync: nodes changed, updating store.', zeroNodes.slice(0, 3));
+			console.log('🔄 Zero sync: nodes changed, updating store.', validZeroNodes.slice(0, 3));
 			// Convert Zero nodes to AppBoxState format
-			boxes = zeroNodes.map((node: any) => ({
-				id: parseInt(node.id),
-				x: node.x,
-				y: node.y,
-				width: node.width,
-				height: node.height,
-				z: node.z_index || 0,
-				type: node.type,
-				content: node.content || {},
-				tags: node.tags || [],
-				color: '#2a2a2a' // Default color
-			}));
+			boxes = validZeroNodes.map((node: any) => {
+				let processedContent = node.content;
+
+				// Ensure content is a string for PDF and Audio types
+				if (node.type === 'pdf' || node.type === 'audio') {
+					if (typeof node.content !== 'string') {
+						processedContent = ''; // Default to empty string if not a string
+					}
+				} else if (typeof node.content !== 'string' && typeof node.content !== 'object') {
+					// For other types, if content is not string or object, default to empty object
+					processedContent = {};
+				}
+
+				return {
+					id: parseInt(node.id),
+					x: node.x,
+					y: node.y,
+					width: node.width,
+					height: node.height,
+					z: node.z_index || 0,
+					type: node.type,
+					content: processedContent,
+					tags: node.tags || [],
+					color: '#2a2a2a' // Default color
+				};
+			});
 		}
 	});
 }
@@ -1214,6 +1230,9 @@ export const canvasStore = {
 				// Set smooth animation targets
 				animationDuration = 250; // Smooth transition
 
+				// Apply the smooth zoom and pan to center the box
+				smoothZoomPan(newFocusZoom, newTargetOffsetX, newTargetOffsetY, animationDuration);
+
 				// Update ghosting after a brief delay to let the zoom settle
 				setTimeout(() => {
 					this.checkAndGhostObstructors(boxId, viewportWidth, viewportHeight);
@@ -1255,6 +1274,9 @@ export const canvasStore = {
 
 				// Set smooth animation targets
 				animationDuration = 250; // Smooth transition
+
+				// Apply the smooth zoom and pan to center the box
+				smoothZoomPan(newFocusZoom, newTargetOffsetX, newTargetOffsetY, animationDuration);
 
 				// Update ghosting after a brief delay to let the zoom settle
 				setTimeout(() => {
