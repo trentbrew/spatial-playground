@@ -6,11 +6,15 @@
 	"builds": [
 		{
 			"src": "package.json",
-			"use": "@vercel/node@20"
+			"use": "@vercel/node@3.0.0"
 		}
 	],
 	"routes": [{ "src": "/(.*)", "dest": "/" }],
 	"env": {
-		"DISABLE_TURTLE_DB": "true"
+		"DISABLE_TURTLE_DB": "true",
+		"NODE_VERSION": "20.19.2"
+	},
+	"engines": {
+		"node": "20.x"
 	}
 }

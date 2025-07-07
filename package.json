@@ -60,5 +60,10 @@
 		"vercel-ai": "^0.0.0",
 		"zero-svelte": "^0.3.6",
 		"zero-svelte-query": "^0.9.0"
+	},
+	"engines": {
+		"node": ">=20.19.2",
+		"npm": ">=10.8.2",
+		"pnpm": ">=10.7.1"
 	}
 }
