@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { canvasManager } from '$lib/stores/canvasManagerStore.svelte';
 	import { fade } from 'svelte/transition';
+	import { Plus, Pencil, Copy, Trash2 } from 'lucide-svelte';
 
 	let isExpanded = $state(false);
 	let isRenaming = $state<string | null>(null);
@@ -126,21 +127,21 @@
 										onclick={() => handleRename(canvas.id)}
 										title="Rename canvas"
 									>
-										✏️
+										<Pencil size={14} />
 									</button>
 									<button
 										class="action-button"
 										onclick={() => duplicateCanvas(canvas.id)}
 										title="Duplicate canvas"
 									>
-										📋
+										<Copy size={14} />
 									</button>
 									<button
 										class="action-button delete"
 										onclick={() => canvasManager.deleteCanvas(canvas.id)}
 										title="Delete canvas"
 									>
-										🗑️
+										<Trash2 size={14} />
 									</button>
 								{:else}
 									<button
@@ -148,7 +149,7 @@
 										onclick={() => duplicateCanvas(canvas.id)}
 										title="Duplicate canvas"
 									>
-										📋
+										<Copy size={14} />
 									</button>
 								{/if}
 							</div>
@@ -159,7 +160,7 @@
 
 			<div class="selector-footer">
 				<button class="new-canvas-button" onclick={createNewCanvas}>
-					<span class="icon">➕</span>
+					<span class="icon">+</span>
 					New Canvas
 				</button>
 			</div>
@@ -239,7 +240,8 @@
 	}
 
 	.canvas-item.active {
-		background: rgba(78, 205, 196, 0.2);
+		background: rgba(255, 255, 255, 0.1);
+		color: white;
 	}
 
 	.canvas-button {
@@ -297,7 +299,7 @@
 	}
 
 	.action-button.delete:hover {
-		background: rgba(255, 107, 107, 0.3);
+		background: rgba(255, 107, 107, 0.1);
 		color: #ff6b6b;
 	}
 
@@ -315,7 +317,7 @@
 	}
 
 	.rename-input:focus {
-		border-color: #4ecdc4;
+		border-color: #007bff;
 		background: rgba(255, 255, 255, 0.15);
 	}
 
@@ -326,9 +328,9 @@
 
 	.new-canvas-button {
 		width: 100%;
-		background: rgba(78, 205, 196, 0.2);
-		border: 1px solid rgba(78, 205, 196, 0.4);
-		color: #4ecdc4;
+		background: rgba(0, 123, 255, 0.2);
+		border: 1px solid rgba(0, 123, 255, 0.4);
+		color: #007bff;
 		padding: 8px 16px;
 		text-align: center;
 		cursor: pointer;
@@ -344,8 +346,8 @@
 	}
 
 	.new-canvas-button:hover {
-		background: rgba(78, 205, 196, 0.3);
-		border-color: #4ecdc4;
+		background: rgba(0, 123, 255, 0.3);
+		border-color: #007bff;
 		transform: translateY(-1px);
 	}
 
