@@ -3,7 +3,6 @@
 	"installCommand": "npm install",
 	"framework": "sveltekit",
 	"version": 2,
-	"routes": [{ "src": "/(.*)", "dest": "/" }],
 	"env": {
 		"DISABLE_TURTLE_DB": "true",
 		"NODE_VERSION": "22.x"
