@@ -40,6 +40,9 @@ function convertAppBoxToZero(appBox: AppBoxState): any {
 const canvasStateStore = writable<any>(null);
 const boxesStore = writable<any[]>([]);
 
+// Add a flag to control whether Zero is enabled
+let zeroEnabled = true;
+
 // Reactive class using standard Svelte stores
 export class CanvasZeroAdapter {
 	// Public stores
@@ -52,7 +55,7 @@ export class CanvasZeroAdapter {
 
 	constructor() {
 		// Subscribe to Zero queries
-		if (typeof window !== 'undefined') {
+		if (typeof window !== 'undefined' && zeroEnabled) {
 			this.#initializeSubscriptions();
 		}
 	}
@@ -79,8 +82,8 @@ export class CanvasZeroAdapter {
 
 			// Check for boxes — shallow-compare by id/position/size/z to avoid emitting identical arrays
 			const zeroBoxes = await queries.allBoxes();
-			if (zeroBoxes) {
-				const incoming = Array.isArray(zeroBoxes) ? zeroBoxes : [];
+			if (zeroBoxes && Array.isArray(zeroBoxes)) {
+				const incoming = zeroBoxes;
 				const current = get(boxesStore);
 
 				const haveBoxesChanged = () => {
@@ -306,14 +309,33 @@ export class CanvasZeroAdapter {
 			this.pollInterval = null;
 		}
 	}
+
+	// Add method to disable Zero
+	disable() {
+		zeroEnabled = false;
+		this.destroy();
+		console.log('Zero adapter disabled');
+	}
+
+	// Add method to check if enabled
+	get isEnabled() {
+		return zeroEnabled;
+	}
 }
 
 // Export a singleton instance
 export const canvasZeroAdapter = new CanvasZeroAdapter();
 
-// Initialize defaults
-if (typeof window !== 'undefined') {
-	canvasZeroAdapter.initializeDefaults();
+// Initialize defaults only if enabled
+if (typeof window !== 'undefined' && zeroEnabled) {
+	// Check if canvas manager is being used
+	const hasCanvasManager = localStorage.getItem('canvas-engine-canvases');
+	if (!hasCanvasManager) {
+		canvasZeroAdapter.initializeDefaults();
+	} else {
+		// Disable Zero if canvas manager is active
+		canvasZeroAdapter.disable();
+	}
 }
 
 // Export Zero client for advanced usage

@@ -1,39 +1,53 @@
 import { Zero } from '@rocicorp/zero';
 import { schema } from '../schema';
 
+// Check if canvas manager is being used
+const hasCanvasManager =
+	typeof window !== 'undefined' && localStorage.getItem('canvas-engine-canvases');
+
 // Create Zero client in local-only mode for Phase 1
-export const zero = new Zero({
-	schema,
+// Only create if canvas manager is not present
+export const zero = hasCanvasManager
+	? null
+	: new Zero({
+			schema,
 
-	// Local-only mode - no server required
-	userID: 'local-user',
+			// Local-only mode - no server required
+			userID: 'local-user',
 
-	// Enable debug logging during development
-	logLevel: 'debug'
-});
+			// Enable debug logging during development
+			logLevel: 'debug'
+		});
+
+if (hasCanvasManager) {
+	console.log('🚫 Zero: Canvas manager detected, Zero client not created');
+}
 
 // Reactive queries for Svelte
 export class ZeroQueries {
-	constructor(private zero: Zero<typeof schema>) {}
+	constructor(private zero: Zero<typeof schema> | null) {}
 
 	// Get canvas state (singleton)
 	canvasState() {
+		if (!this.zero) return null;
 		return this.zero.query.canvas_state.where('id', 'viewport').one();
 	}
 
 	// Get all boxes
 	allBoxes() {
+		if (!this.zero) return [];
 		return this.zero.query.nodes.orderBy('created_at', 'asc');
 	}
 
 	// Get a specific box by ID
 	box(id: string) {
+		if (!this.zero) return null;
 		return this.zero.query.nodes.where('id', id).one();
 	}
 
 	// Get selected box
 	selectedBox(selectedBoxId: string | null) {
-		if (!selectedBoxId) return null;
+		if (!this.zero || !selectedBoxId) return null;
 		return this.zero.query.nodes.where('id', selectedBoxId).one();
 	}
 }
@@ -42,10 +56,11 @@ export const queries = new ZeroQueries(zero);
 
 // Mutators for data changes
 export class ZeroMutators {
-	constructor(private zero: Zero<typeof schema>) {}
+	constructor(private zero: Zero<typeof schema> | null) {}
 
 	// Initialize canvas state if it doesn't exist
 	async initializeCanvasState() {
+		if (!this.zero) return;
 		const existing = await this.zero.query.canvas_state.where('id', 'viewport').one();
 		if (!existing) {
 			const now = new Date().toISOString();
@@ -74,6 +89,7 @@ export class ZeroMutators {
 		lastSelectedBoxId?: string | null;
 		persistenceEnabled?: boolean;
 	}) {
+		if (!this.zero) return;
 		await this.zero.mutate.canvas_state.update({
 			id: 'viewport',
 			...updates,
@@ -92,6 +108,7 @@ export class ZeroMutators {
 		type: string;
 		content?: any;
 	}) {
+		if (!this.zero) return;
 		const now = new Date().toISOString();
 		await this.zero.mutate.nodes.insert({
 			...box,
@@ -112,6 +129,7 @@ export class ZeroMutators {
 			content?: any;
 		}
 	) {
+		if (!this.zero) return;
 		await this.zero.mutate.nodes.update({
 			id,
 			...updates,
@@ -121,6 +139,7 @@ export class ZeroMutators {
 
 	// Delete a box
 	async deleteBox(id: string) {
+		if (!this.zero) return;
 		await this.zero.mutate.nodes.delete({
 			id
 		});
@@ -129,7 +148,13 @@ export class ZeroMutators {
 
 export const mutators = new ZeroMutators(zero);
 
-// Initialize on first load
+// Initialize on first load ONLY if canvas manager is not present
 if (typeof window !== 'undefined') {
-	mutators.initializeCanvasState();
+	// Check if canvas manager is being used
+	const hasCanvasManager = localStorage.getItem('canvas-engine-canvases');
+	if (!hasCanvasManager) {
+		mutators.initializeCanvasState();
+	} else {
+		console.log('🚫 Zero: Canvas manager detected, skipping initialization');
+	}
 }

@@ -11,9 +11,10 @@
 	import { setViewportContext } from '$lib/contexts/viewportContext';
 	import TracingIndicator from './TracingIndicator.svelte';
 	import ObstructionIndicator from './ObstructionIndicator.svelte';
-	import SceneStats from './SceneStats.svelte';
+	import CanvasSelector from './CanvasSelector.svelte';
 	import ContextMenu from './ContextMenu.svelte';
 	import { contextMenuStore, type ContextMenuItem } from '$lib/stores/contextMenuStore.svelte';
+	import { canvasManager } from '$lib/stores/canvasManagerStore.svelte';
 	import {
 		FOCUS_TRANSITION_DURATION,
 		DEFAULT_NODE_DIMENSIONS,
@@ -120,19 +121,34 @@
 			resizeObserver.observe(viewportElement);
 		}
 
-		// --- Initial View Calculation ---
+		// --- Initial Scene & View Calculation ---
 		if (!browser || !viewportElement) return;
 
 		// Run this only once on initial mount
-		requestAnimationFrame(() => {
-			const initialBoxes = canvasStore.boxes;
-			if (initialBoxes.length === 0) return; // No boxes, nothing to center
+		requestAnimationFrame(async () => {
+			// Wait for canvas manager to initialize
+			await canvasManager.waitForInit();
+
+			let currentBoxes = canvasStore.boxes;
+
+			// Only generate gallery for the default canvas if it's empty
+			const activeCanvas = canvasManager.activeCanvas;
+			if (activeCanvas?.isDefault && currentBoxes.length === 0) {
+				try {
+					await canvasStore.regenerateScene();
+					currentBoxes = canvasStore.boxes;
+				} catch (err) {
+					console.error('Failed to auto-generate artwork gallery:', err);
+				}
+			}
+
+			if (currentBoxes.length === 0) return; // Still nothing, abort centering
 
 			const viewportWidth = viewportElement.clientWidth;
 			const viewportHeight = viewportElement.clientHeight;
 			if (viewportWidth === 0 || viewportHeight === 0) return; // Avoid division by zero
 
-			const bbox = calculateBoundingBox(initialBoxes);
+			const bbox = calculateBoundingBox(currentBoxes);
 			if (!bbox) return;
 
 			const optimalView = calculateOptimalViewport(bbox, viewportWidth, viewportHeight);
@@ -627,7 +643,7 @@
 	<NodesLayer />
 </div>
 
-<SceneStats />
+<CanvasSelector />
 <Minimap />
 
 <ContextMenu

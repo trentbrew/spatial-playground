@@ -184,48 +184,70 @@ let hasSavedState = $state(false);
 
 // Subscribe to Zero adapter for boxes data ONLY
 let boxes = $state<AppBoxState[]>([]);
+let zeroUnsubscribe: (() => void) | null = null;
 
-if (typeof window !== 'undefined') {
-	canvasZeroAdapter.allNodes.subscribe((zeroNodes) => {
-		if (Array.isArray(zeroNodes)) {
-			// Filter out any null or undefined nodes from the raw Zero data
-			const validZeroNodes = zeroNodes.filter(Boolean);
+// Function to handle Zero subscription
+function setupZeroSubscription() {
+	console.log('🔄 Canvas Store: setupZeroSubscription called');
 
-			// Defend against unnecessary reactive churn from polling.
-			if (!haveBoxesChanged(boxes, validZeroNodes)) {
+	// Clean up any existing subscription
+	if (zeroUnsubscribe) {
+		zeroUnsubscribe();
+		zeroUnsubscribe = null;
+	}
+
+	// Only subscribe if Zero is enabled
+	if (typeof window !== 'undefined' && canvasZeroAdapter.isEnabled) {
+		console.log('🔄 Canvas Store: Setting up Zero subscription (Zero is enabled)');
+		zeroUnsubscribe = canvasZeroAdapter.allNodes.subscribe((zeroNodes) => {
+			// Double-check that Zero is still enabled
+			if (!canvasZeroAdapter.isEnabled) {
+				console.log('🔄 Canvas Store: Zero was disabled during subscription, ignoring data');
 				return;
 			}
-			console.log('🔄 Zero sync: nodes changed, updating store.', validZeroNodes.slice(0, 3));
-			// Convert Zero nodes to AppBoxState format
-			boxes = validZeroNodes.map((node: any) => {
-				let processedContent = node.content;
 
-				// Ensure content is a string for PDF and Audio types
-				if (node.type === 'pdf' || node.type === 'audio') {
-					if (typeof node.content !== 'string') {
-						processedContent = ''; // Default to empty string if not a string
-					}
-				} else if (typeof node.content !== 'string' && typeof node.content !== 'object') {
-					// For other types, if content is not string or object, default to empty object
-					processedContent = {};
+			if (Array.isArray(zeroNodes)) {
+				// Filter out any null or undefined nodes from the raw Zero data
+				const validZeroNodes = zeroNodes.filter(Boolean);
+
+				// Defend against unnecessary reactive churn from polling.
+				if (!haveBoxesChanged(boxes, validZeroNodes)) {
+					return;
 				}
+				console.log('🔄 Zero sync: nodes changed, updating store.', validZeroNodes.slice(0, 3));
+				// Convert Zero nodes to AppBoxState format
+				boxes = validZeroNodes.map((node: any) => {
+					let processedContent = node.content;
 
-				return {
-					id: parseInt(node.id),
-					x: node.x,
-					y: node.y,
-					width: node.width,
-					height: node.height,
-					z: node.z_index || 0,
-					type: node.type,
-					content: processedContent,
-					tags: node.tags || [],
-					color: '#2a2a2a' // Default color
-				};
-			});
-		}
-	});
+					// Ensure content is a string for PDF and Quill nodes
+					if (node.type === 'pdf' || node.type === 'quill') {
+						if (typeof processedContent !== 'string') {
+							processedContent = JSON.stringify(processedContent);
+						}
+					}
+
+					return {
+						id: parseInt(node.id),
+						x: node.x,
+						y: node.y,
+						width: node.width,
+						height: node.height,
+						z: node.z_index || 0,
+						content: processedContent,
+						color: node.color || '#ffffff',
+						type: node.type || 'note',
+						tags: node.tags || []
+					};
+				});
+			}
+		});
+	} else {
+		console.log('🔄 Canvas Store: Skipping Zero subscription (Zero is disabled or not in browser)');
+	}
 }
+
+// Don't set up subscription immediately - wait to check if canvas manager is present
+// setupZeroSubscription();
 
 // Helper function to check if two boxes overlap (with padding)
 function boxesOverlap(
@@ -602,21 +624,25 @@ async function addBoxInternal(box: AppBoxState) {
 		console.error('Refusing to store array as content in addBoxInternal!', box.content);
 		return;
 	}
-	try {
-		// Add to Zero first
-		await canvasZeroAdapter.addNode({
-			x: box.x,
-			y: box.y,
-			width: box.width,
-			height: box.height,
-			type: box.type,
-			content: box.content,
-			// @ts-ignore extra fields tolerated by backend
-			tags: box.tags,
-			color: box.color
-		} as any);
-	} catch (error) {
-		console.error('Failed to add box to Zero:', error);
+
+	// Only use Zero if it's enabled
+	if (canvasZeroAdapter.isEnabled) {
+		try {
+			// Add to Zero first
+			await canvasZeroAdapter.addNode({
+				x: box.x,
+				y: box.y,
+				width: box.width,
+				height: box.height,
+				type: box.type,
+				content: box.content,
+				// @ts-ignore extra fields tolerated by backend
+				tags: box.tags,
+				color: box.color
+			} as any);
+		} catch (error) {
+			console.error('Failed to add box to Zero:', error);
+		}
 	}
 }
 
@@ -625,20 +651,27 @@ async function updateBoxInternal(id: number, partial: Partial<AppBoxState>) {
 		console.error('Refusing to store array as content in updateBoxInternal!', partial.content);
 		return;
 	}
-	try {
-		// Update in Zero first
-		await canvasZeroAdapter.updateBox(id, partial);
-	} catch (error) {
-		console.error('Failed to update box in Zero:', error);
+
+	// Only use Zero if it's enabled
+	if (canvasZeroAdapter.isEnabled) {
+		try {
+			// Update in Zero first
+			await canvasZeroAdapter.updateBox(id, partial);
+		} catch (error) {
+			console.error('Failed to update box in Zero:', error);
+		}
 	}
 }
 
 async function deleteBoxInternal(id: number) {
-	try {
-		// Delete from Zero first
-		await canvasZeroAdapter.deleteBox(id);
-	} catch (error) {
-		console.error('Failed to delete box from Zero:', error);
+	// Only use Zero if it's enabled
+	if (canvasZeroAdapter.isEnabled) {
+		try {
+			// Delete from Zero first
+			await canvasZeroAdapter.deleteBox(id);
+		} catch (error) {
+			console.error('Failed to delete box from Zero:', error);
+		}
 	}
 }
 
@@ -660,37 +693,48 @@ function debouncedSave() {
 async function saveState() {
 	if (!persistenceEnabled) return;
 
-	try {
-		// Save viewport state to Zero
-		await canvasZeroAdapter.updateViewport({
-			zoom: get(zoom),
-			offsetX: get(offsetX),
-			offsetY: get(offsetY),
-			selectedBoxId: selectedBoxId,
-			fullscreenBoxId: fullscreenBoxId,
-			lastSelectedBoxId: lastSelectedBoxId,
-			persistenceEnabled: persistenceEnabled
-		});
-		console.log('💾 Canvas state saved to Zero');
-	} catch (error) {
-		console.error('Failed to save canvas state to Zero:', error);
+	// Only use Zero if it's enabled
+	if (canvasZeroAdapter.isEnabled) {
+		try {
+			// Save viewport state to Zero
+			await canvasZeroAdapter.updateViewport({
+				zoom: get(zoom),
+				offsetX: get(offsetX),
+				offsetY: get(offsetY),
+				selectedBoxId: selectedBoxId,
+				fullscreenBoxId: fullscreenBoxId,
+				lastSelectedBoxId: lastSelectedBoxId,
+				persistenceEnabled: persistenceEnabled
+			});
+			console.log('💾 Canvas state saved to Zero');
+		} catch (error) {
+			console.error('Failed to save canvas state to Zero:', error);
+		}
 	}
 }
 
 async function loadState() {
-	try {
-		// Initialize Zero adapter defaults
-		await canvasZeroAdapter.initializeDefaults();
-		console.log('📂 Canvas state loading from Zero...');
-		// State will be loaded via Zero subscriptions set up earlier
-	} catch (error) {
-		console.error('Failed to load canvas state from Zero:', error);
+	// Only use Zero if it's enabled
+	if (canvasZeroAdapter.isEnabled) {
+		try {
+			// Initialize Zero adapter defaults
+			await canvasZeroAdapter.initializeDefaults();
+			console.log('📂 Canvas state loading from Zero...');
+			// State will be loaded via Zero subscriptions set up earlier
+		} catch (error) {
+			console.error('Failed to load canvas state from Zero:', error);
+		}
 	}
 }
 
 // Load state on module initialization
-if (typeof window !== 'undefined') {
+// Skip if canvasManager will handle loading
+if (typeof window !== 'undefined' && !localStorage.getItem('canvas-engine-canvases')) {
+	console.log('🔄 Canvas Store: No canvas manager detected, setting up Zero subscription');
+	setupZeroSubscription();
 	loadState();
+} else if (typeof window !== 'undefined') {
+	console.log('🔄 Canvas Store: Canvas manager detected, skipping Zero subscription');
 }
 
 // Store functions
@@ -811,6 +855,22 @@ export const canvasStore = {
 
 	setPersistence(enabled: boolean) {
 		persistenceEnabled = enabled;
+		// Note: canvasStore doesn't use localStorage directly, it uses Zero adapter
+		// The canvas manager handles its own localStorage separately
+	},
+
+	// Clean up Zero subscription
+	cleanupZeroSubscription() {
+		if (zeroUnsubscribe) {
+			zeroUnsubscribe();
+			zeroUnsubscribe = null;
+			console.log('Cleaned up Zero subscription');
+		}
+	},
+
+	// Set up Zero subscription manually
+	setupZeroSubscription() {
+		setupZeroSubscription();
 	},
 
 	setAperture(enabled: boolean) {
