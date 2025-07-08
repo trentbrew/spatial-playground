@@ -6,6 +6,6 @@
 	"routes": [{ "src": "/(.*)", "dest": "/" }],
 	"env": {
 		"DISABLE_TURTLE_DB": "true",
-		"NODE_VERSION": "18.x"
+		"NODE_VERSION": "22.x"
 	}
 }
