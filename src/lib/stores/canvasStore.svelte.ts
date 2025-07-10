@@ -1059,26 +1059,8 @@ export const canvasStore = {
 		// 2. Get the target zoom for the box's z-plane to be in focus
 		// Use progressively higher zoom levels for deeper negative z-indices
 		let newTargetZoom;
-		if (z >= 0) {
-			// For foreground nodes, use the regular calculation
-			newTargetZoom = getFocusZoomForZ(z);
-		} else {
-			// For background nodes, use a more nuanced approach based on specific z-index
-			switch (z) {
-				case -1:
-					newTargetZoom = 4.5; // Moderate zoom for z=-1
-					break;
-				case -2:
-					newTargetZoom = 6.0; // Higher zoom for z=-2
-					break;
-				case -3:
-					newTargetZoom = 7.5; // Even higher zoom for z=-3
-					break;
-				default:
-					// For extremely deep nodes (z < -3)
-					newTargetZoom = 8.0 + (Math.abs(z) - 3) * 0.5; // Add 0.5 for each level below -3
-			}
-		}
+		// Use depth utility to derive appropriate focus zoom for all z-levels.
+		newTargetZoom = getFocusZoomForZ(z);
 
 		console.log(`🔍 Using z-index ${z}, target zoom: ${newTargetZoom}`);
 

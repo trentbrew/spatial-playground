@@ -15,9 +15,9 @@ import {
  */
 export const getFocusZoomForZ = (z: number): number => {
 	// The base of the exponent determines how dramatically focus changes with Z.
-	// 0.6 was chosen for a more dramatic effect.
+	// 0.77 gives roughly half the steepness compared to the previous 0.6 base (shallower depth).
 	// For Z=0 (foreground), we add a minimum zoom to make interaction feel responsive
-	const baseZoom = Math.pow(0.6, z);
+	const baseZoom = Math.pow(0.77, z);
 
 	// For far-back nodes (negative z), increase minimum zoom to ensure clarity
 	// The further back the node, the higher the minimum zoom
@@ -27,7 +27,7 @@ export const getFocusZoomForZ = (z: number): number => {
 		// Use a gentler minimum zoom for back layers so they remain closer in perceived depth
 		// This makes the overall Z-stack feel more compact.
 		// Example with new formula: z=-1 → 2.5, z=-2 → 3.0, z=-3 → 3.5
-		minZoom = 2.0 + Math.abs(z) * 0.5;
+		minZoom = 2.0 + Math.abs(z) * 0.25; // shallower increase per depth level
 	}
 
 	return Math.max(minZoom, baseZoom); // Use higher minimum zoom for better clarity
@@ -66,13 +66,13 @@ export const getParallaxFactor = (z: number): number => {
 	// This creates a more natural depth feel without pushing nodes too far
 	if (z < 0) {
 		// Background layers: diminishing parallax as we go deeper
-		// Formula: 1.0 - (1 - 0.7^|z|) gives us: Z-1=0.7, Z-2=0.51, Z-3=0.357
-		const factor = 1.0 - (1.0 - Math.pow(0.7, Math.abs(z)));
-		return Math.max(0.3, factor); // Never go below 30% speed
+		// Formula: 1.0 - (1 - 0.84^|z|) gives us: Z-1≈0.84, Z-2≈0.71, Z-3≈0.60
+		const factor = 1.0 - (1.0 - Math.pow(0.84, Math.abs(z)));
+		return Math.max(0.5, factor); // Never go below 50% speed
 	} else {
-		// Foreground layers: moderate increase in parallax
-		// Formula: 1.0 + 0.3 * z gives us: Z+1=1.3, Z+2=1.6, Z+3=1.9
-		return 1.0 + 0.3 * z;
+		// Foreground layers: gentler increase in parallax
+		// Formula: 1.0 + 0.15 * z gives us: Z+1=1.15, Z+2=1.30, Z+3=1.45
+		return 1.0 + 0.15 * z;
 	}
 };
 
