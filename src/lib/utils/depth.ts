@@ -24,9 +24,10 @@ export const getFocusZoomForZ = (z: number): number => {
 	let minZoom = 1.5; // Default minimum zoom
 
 	if (z < 0) {
-		// Very aggressively increase minimum zoom for back layers
-		// For example: z=-1 → 4.5, z=-2 → 6.0, z=-3 → 7.5
-		minZoom = 4.5 + Math.abs(z) * 1.5;
+		// Use a gentler minimum zoom for back layers so they remain closer in perceived depth
+		// This makes the overall Z-stack feel more compact.
+		// Example with new formula: z=-1 → 2.5, z=-2 → 3.0, z=-3 → 3.5
+		minZoom = 2.0 + Math.abs(z) * 0.5;
 	}
 
 	return Math.max(minZoom, baseZoom); // Use higher minimum zoom for better clarity
