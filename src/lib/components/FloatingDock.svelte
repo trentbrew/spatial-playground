@@ -73,7 +73,7 @@
 
 		const items: ContextMenuItem[] = [
 			{ id: 'add-note', label: 'Add Note', icon: StickyNote },
-			{ id: 'add-code', label: 'Add Code Block', icon: Code },
+			// { id: 'add-code', label: 'Add Code Block', icon: Code },
 			{ id: 'add-image', label: 'Add Image', icon: ImageIcon },
 			{ id: 'add-embed', label: 'Add Embed', icon: Globe },
 			{ id: 'add-pdf', label: 'Add PDF', icon: FileText },

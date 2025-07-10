@@ -1,6 +1,7 @@
-<script>
+<script lang="ts">
 	import { onMount, onDestroy, createEventDispatcher } from 'svelte';
 	import { browser } from '$app/environment';
+	import { marked } from 'marked';
 
 	export let content = '';
 	export let onContentChange = (newContent) => {};
@@ -17,6 +18,8 @@
 	let isQuillLoaded = false;
 	let initError = null;
 	let hasTextSelection = false;
+
+
 
 	// Fallback textarea for SSR and error states
 	let fallbackTextarea;
@@ -119,10 +122,18 @@
 				}
 			}
 
-			// Set initial content if provided
+			// Convert basic markdown to HTML for initial render
 			if (fallbackContent) {
-				quill.setText(fallbackContent);
-				isInitialized = true;
+				try {
+															const html = marked.parse(fallbackContent);
+					quill.clipboard.dangerouslyPasteHTML(html, 'silent');
+					isInitialized = true;
+				} catch (err) {
+					console.warn('Error applying initial markdown formatting:', err);
+					// Fallback to plain text if HTML conversion fails
+					quill.setText(fallbackContent);
+					isInitialized = true;
+				}
 			}
 
 			// Handle content changes
@@ -249,7 +260,7 @@
 
 <style>
 	.editor-wrapper {
-		padding: 4px;
+		padding: 0px;
 		width: 100%;
 		height: 100%;
 		position: relative;
@@ -334,7 +345,7 @@
 		color: var(--foreground-color, #181818) !important;
 	}
 
-	:global(.focused.has-selection .ql-toolbar) {
+	:global(.editor-wrapper.focused .ql-toolbar) {
 		opacity: 1;
 		visibility: visible;
 		background: rgba(0, 0, 0, 1) !important;

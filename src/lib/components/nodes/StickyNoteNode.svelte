@@ -102,13 +102,13 @@
 </script>
 
 <div class="sticky-note-container" style:background-color={color}>
-	<div class="sticky-note-content">
+	<div class="sticky-note-content" class:noninteractive={!isSelected}>
 		<div class="editor-container">
 			{#if useQuillEditor && QuillEditor}
 				<!-- Use Quill Editor when available -->
 				<QuillEditorComponent
 					content={textContent}
-					{isFocused}
+					isFocused={isFocused || isSelected}
 					showColorButton={true}
 					on:colorpick={() => (showColorPalette = !showColorPalette)}
 					onContentChange={handleContentChange}
@@ -119,6 +119,7 @@
 			{:else}
 				<!-- Fallback for SSR or if Quill fails -->
 				<textarea
+					readonly={!isSelected}
 					bind:value={textContent}
 					oninput={handleTextareaChange}
 					placeholder="Start writing..."
@@ -163,6 +164,16 @@
 		position: relative;
 	}
 
+	.sticky-note-content {
+		pointer-events: auto; /* default when selected */
+	}
+
+	/* Disable all interactions when this note is not the selected/active one so the container can still be dragged */
+	.noninteractive {
+		pointer-events: none;
+	}
+
+	/* Existing rules */
 	.sticky-note-content {
 		width: 100%;
 		height: 100%;

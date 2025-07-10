@@ -154,32 +154,29 @@
 	}
 
 	function handleClick(event: MouseEvent) {
-		// If the box is already focused, do nothing to allow content interaction.
-		if (zoomedBoxId === box.id) {
-			return;
-		}
-
-		// Always select the box first
+		// Single-click: only activate/select the node so its content can be interacted with.
 		canvasStore.selectBox(box.id, viewportWidth, viewportHeight);
-
-		// Zoom to focus on the box (this includes centering + zoom)
-		canvasStore.zoomToBox(box.id, viewportWidth, viewportHeight);
-
-		// Check for obstruction and ghost blocking nodes
-		setTimeout(() => {
-			// Delay slightly to allow zoom animation to start
-			canvasStore.checkAndGhostObstructors(box.id, viewportWidth, viewportHeight);
-		}, 100);
 	}
 
 	function handleDoubleClick(event: MouseEvent) {
-		// Don't zoom out for sticky notes - let them handle double-click for editing
+		// Sticky notes reserve double-click for editing their content.
 		if (box.type === 'sticky') {
 			return;
 		}
 
-		// A double click will now restore the previous zoom level (zoom out)
-		// canvasStore.restorePreviousZoom();
+		// If we're already focused on this node, toggle back to the previous zoom level if supported.
+		if (zoomedBoxId === box.id && typeof canvasStore.restorePreviousZoom === 'function') {
+			canvasStore.restorePreviousZoom();
+			return;
+		}
+
+		// Double-click: focus and zoom in to this node.
+		canvasStore.selectBox(box.id, viewportWidth, viewportHeight);
+		canvasStore.zoomToBox(box.id, viewportWidth, viewportHeight);
+
+		setTimeout(() => {
+			canvasStore.checkAndGhostObstructors(box.id, viewportWidth, viewportHeight);
+		}, 100);
 	}
 
 	function handleRightClick(event: MouseEvent) {
@@ -306,6 +303,20 @@
 
 	function handleDragStart(event: PointerEvent) {
 		if (event.button !== 0 && event.pointerType === 'mouse') return;
+
+		// Prevent dragging when interacting with interactive UI controls (inputs, buttons, editable areas, the close
+		// button, the resize handle, etc.) so their own handlers are not disrupted.
+		const targetEl = event.target as HTMLElement;
+
+		// Abort drag if the original pointer target or any of its ancestors match the selector list.
+		if (
+			targetEl.closest(
+				'input, textarea, select, button, a, [contenteditable], .node-close, .resize-handle'
+			) ||
+			targetEl.dataset.cursor === 'resize'
+		) {
+			return;
+		}
 		if (fullscreenBoxId !== null) return;
 
 		console.log('Drag started for box:', box.id);
@@ -365,6 +376,7 @@
 <div
 	class="box {showSettingsBack ? 'flipped' : ''}"
 	tabindex="0"
+	onpointerdown={handleDragStart}
 	onclick={handleClick}
 	ondblclick={handleDoubleClick}
 	oncontextmenu={handleRightClick}
@@ -439,17 +451,20 @@
 					<X class="h-5 w-5" />
 				</button>
 			</div>
-			<Component
-				id={box.id}
-				content={box.content}
-				color={box.color}
-				isSelected={selectedBoxId === box.id}
-				isFullscreen={fullscreenBoxId === box.id}
-				isFocused={zoomedBoxId === box.id}
-			/>
+			<!-- Wrapper toggles interactivity: only selected node receives pointer events for editing -->
+			<div class="component-wrapper" class:editing-disabled={selectedBoxId !== box.id}>
+				<Component
+					id={box.id}
+					content={box.content}
+					color={box.color}
+					isSelected={selectedBoxId === box.id}
+					isFullscreen={fullscreenBoxId === box.id}
+					isFocused={zoomedBoxId === box.id}
+				/>
+			</div>
 
 			<!-- Drag Handle (always visible but subtle) -->
-			{#if !fullscreenBoxId}
+			{#if !fullscreenBoxId && selectedBoxId === box.id}
 				<div
 					role="button"
 					class="drag-handle"
@@ -1012,4 +1027,13 @@
 	.back-arrow {
 		margin-right: 10px;
 	}
+.component-wrapper {
+	width: 100%;
+	height: 100%;
+}
+
+.editing-disabled {
+	pointer-events: none;
+}
+
 </style>

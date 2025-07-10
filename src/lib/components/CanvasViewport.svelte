@@ -208,11 +208,11 @@
 				label: 'Add Note',
 				icon: StickyNote
 			},
-			{
-				id: 'add-code',
-				label: 'Add Code Block',
-				icon: Code
-			},
+			// {
+			// 	id: 'add-code',
+			// 	label: 'Add Code Block',
+			// 	icon: Code
+			// },
 			{
 				id: 'add-image',
 				label: 'Add Image',
